@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import type { SettingsManager } from '../settings/settingsCommands.js';
 import { resolveAuthMode, resolveConfiguredApiKey, resolveEnvApiKey } from '../settings/naviConfig.js';
 
 const ENV_API_KEY_CONFIRMED_STATE_KEY = 'navi.confirmedEnvApiKey';
@@ -13,7 +12,7 @@ const ENV_API_KEY_CONFIRMED_STATE_KEY = 'navi.confirmedEnvApiKey';
 export class ApiKeyGate {
 	constructor(
 		private readonly globalState: vscode.Memento,
-		private readonly settingsManager: SettingsManager
+		private readonly openSettings: (focus?: { category: 'auth'; field: 'apiKey' }) => void
 	) {}
 
 	public async ensureApiKey(): Promise<boolean> {
@@ -51,7 +50,7 @@ export class ApiKeyGate {
 			}
 
 			if (choice === 'Configure key') {
-				await this.settingsManager.openApiKeySettings();
+				this.openSettings({ category: 'auth', field: 'apiKey' });
 				const refreshedApiKey = resolveConfiguredApiKey(config);
 				if (refreshedApiKey) {
 					return true;
@@ -69,7 +68,7 @@ export class ApiKeyGate {
 			'Switch to Copilot mode'
 		);
 		if (setupChoice === 'Configure key') {
-			await this.settingsManager.openApiKeySettings();
+			this.openSettings({ category: 'auth', field: 'apiKey' });
 			const updatedApiKey = resolveConfiguredApiKey(config);
 			return !!updatedApiKey;
 		}

@@ -3,7 +3,6 @@ import type { NaviChatGateway } from '../agent/gateway';
 import { logAgentFlow, summarizeText } from '../agent/debugLogger.js';
 import { createMainChatGateway } from '../agent/mainAgent.js';
 import type { FocusController } from '../focus/focusController.js';
-import type { SettingsManager } from '../settings/settingsCommands.js';
 import { affectsModel } from '../settings/naviConfig.js';
 import { ApiKeyGate } from './apiKeyGate.js';
 import type { ChatMessenger } from './chatMessenger.js';
@@ -29,10 +28,10 @@ export class GenerationController {
 		private readonly messenger: ChatMessenger,
 		private readonly tracker: SubagentRunTracker,
 		private readonly focusController: FocusController,
-		private readonly settingsManager: SettingsManager,
 		private readonly globalState: vscode.Memento
 	) {
-		this.apiKeyGate = new ApiKeyGate(this.globalState, this.settingsManager);
+		this.apiKeyGate = new ApiKeyGate(this.globalState,
+			(focus) => vscode.commands.executeCommand('navi.openSettings', focus));
 		this.gateway = createMainChatGateway({
 			getCurrentSessionId: () => this.sessionStore.getCurrentSessionId(),
 			getTodos: (sessionId) => this.sessionStore.getTodos(sessionId),

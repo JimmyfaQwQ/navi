@@ -125,6 +125,10 @@
       {
         "command": "navi.focusNext",
         "title": "Navi: Focus Next Region"
+      },
+      {
+        "command": "navi.openSettings",
+        "title": "Navi: Open Settings"
       }
     ],
     "menus": {

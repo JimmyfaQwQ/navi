@@ -9,7 +9,8 @@ import { FocusController } from './focus/focusController.js';
 import { FocusDecorations } from './focus/focusDecorations.js';
 import { FocusStatusBar } from './focus/focusStatusBar.js';
 import { NaviFocusViewProvider } from './focus/focusViewProvider.js';
-import { SettingsManager } from './settings/settingsCommands.js';
+import { ModelCatalog } from './settings/modelCatalog.js';
+import { SettingsPanel } from './settings/settingsPanel.js';
 import { getChatHtml } from './webview/chat/html.js';
 import { getFocusHtml } from './webview/focus/html.js';
 
@@ -17,7 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "navi" is now active!');
 
 	const sessionStore = new ChatSessionStore();
-	const settingsManager = new SettingsManager();
+	const modelCatalog = new ModelCatalog();
 	const focusDecorations = new FocusDecorations();
 	const focusStatusBar = new FocusStatusBar();
 
@@ -42,7 +43,6 @@ export function activate(context: vscode.ExtensionContext) {
 		messenger,
 		tracker,
 		focusController,
-		settingsManager,
 		context.globalState
 	);
 	const router = new ChatInboundRouter(
@@ -50,7 +50,6 @@ export function activate(context: vscode.ExtensionContext) {
 		focusController,
 		generationController,
 		messenger,
-		settingsManager,
 		(sessionId) => focusProvider.postFocusState(sessionId)
 	);
 
@@ -70,6 +69,8 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.registerWebviewViewProvider(NaviChatViewProvider.viewType, chatProvider),
 		vscode.window.registerWebviewViewProvider(NaviFocusViewProvider.viewType, focusProvider),
 		vscode.commands.registerCommand('navi.newChat', () => router.createNewSession()),
+		vscode.commands.registerCommand('navi.openSettings', (focus?) =>
+			SettingsPanel.createOrShow(context.extensionUri, modelCatalog, focus)),
 		vscode.commands.registerCommand('navi.helloWorld', () => {
 			vscode.window.showInformationMessage('Hello World from Navi!');
 		}),

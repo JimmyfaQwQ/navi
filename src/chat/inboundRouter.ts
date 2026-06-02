@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { logAgentFlow } from '../agent/debugLogger.js';
 import type { FocusController } from '../focus/focusController.js';
-import type { SettingsManager } from '../settings/settingsCommands.js';
 import type { ChatInboundMessage } from '../types/chat';
 import type { ChatMessenger } from './chatMessenger.js';
 import type { GenerationController } from './generationController.js';
@@ -18,7 +17,6 @@ export class ChatInboundRouter {
 		private readonly focusController: FocusController,
 		private readonly generationController: GenerationController,
 		private readonly messenger: ChatMessenger,
-		private readonly settingsManager: SettingsManager,
 		private readonly postFocusStateToFocusView: (sessionId: string) => Promise<void>
 	) {}
 
@@ -129,7 +127,7 @@ export class ChatInboundRouter {
 		}
 
 		if (message.type === 'chat:openSettings') {
-			await this.settingsManager.openSettings();
+			await vscode.commands.executeCommand('navi.openSettings');
 			return;
 		}
 
