@@ -1,7 +1,7 @@
 import type {
-	ModelCatalogResult, SettingsSnapshot, SettingsInbound, SettingsOutbound, SettingKey
+	ModelCatalogResult, ModelChoice, SettingsSnapshot, SettingsInbound, SettingsOutbound, SettingKey
 } from '../../types/settings.js';
-export type { ModelCatalogResult, SettingsSnapshot, SettingsInbound, SettingsOutbound, SettingKey };
+export type { ModelCatalogResult, ModelChoice, SettingsSnapshot, SettingsInbound, SettingsOutbound, SettingKey };
 
 interface VsCodeApi { postMessage(msg: SettingsInbound): void; }
 declare function acquireVsCodeApi(): VsCodeApi;
