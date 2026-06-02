@@ -1,0 +1,32 @@
+.settings-shell { display: flex; height: 100vh; color: var(--vscode-foreground); font-size: 13px; }
+.settings-nav { flex: 0 0 180px; border-right: 1px solid var(--vscode-panel-border); padding: 12px 0; }
+.settings-cat { display: block; width: 100%; text-align: left; padding: 8px 16px; background: none;
+	border: none; color: var(--vscode-foreground); cursor: pointer; }
+.settings-cat.active { background: var(--vscode-list-activeSelectionBackground);
+	border-left: 2px solid var(--vscode-focusBorder); }
+.settings-content { flex: 1; padding: 20px 24px; overflow: auto; }
+.settings-section { display: none; } .settings-section.active { display: block; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0;
+	border-bottom: 1px solid var(--vscode-panel-border); gap: 16px; }
+.settings-row label { color: var(--vscode-descriptionForeground); }
+.settings-input, .settings-select { background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 3px; padding: 4px 8px; min-width: 220px; }
+.model-control { position: relative; }
+.model-popover { position: absolute; right: 0; z-index: 10; background: var(--vscode-dropdown-background);
+	border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border)); border-radius: 4px; min-width: 280px; }
+.model-item { padding: 6px 10px; cursor: pointer; display: flex; gap: 8px; }
+.model-item:hover { background: var(--vscode-list-hoverBackground); }
+.model-item.disabled { opacity: .5; pointer-events: none; }
+.model-item .meta { color: var(--vscode-descriptionForeground); font-size: 11px; margin-left: auto; }
+.model-action { padding: 6px 10px; color: var(--vscode-textLink-foreground); cursor: pointer; }
+.tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground); }
+.mcp-card { border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+.mcp-card.disabled { opacity: .55; }
+.mcp-field { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.mcp-field .k { flex: 0 0 90px; color: var(--vscode-descriptionForeground); }
+.mcp-add { border: 1px dashed var(--vscode-panel-border); border-radius: 6px; padding: 10px;
+	text-align: center; color: var(--vscode-textLink-foreground); cursor: pointer; }
+.field-error { color: var(--vscode-errorForeground); font-size: 11px; }
+.toggle { cursor: pointer; }

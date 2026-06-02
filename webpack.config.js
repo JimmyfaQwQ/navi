@@ -60,7 +60,8 @@ const webviewConfig = {
   mode: 'none',
   entry: {
 		chatApp: './src/webview/chat/view.ts',
-		focusApp: './src/webview/focus/view.ts'
+		focusApp: './src/webview/focus/view.ts',
+		settingsApp: './src/webview/settings/view.ts'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
