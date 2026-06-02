@@ -2,12 +2,17 @@ import * as assert from 'assert';
 import {
 	DEFAULT_API_BASE_URL,
 	DEFAULT_MODEL,
+	describeApiKeySource,
 	readNaviConfig,
 	resolveAuthMode,
 	resolveBaseUrl,
 	resolveModel,
 	resolveStreaming
 } from '../settings/naviConfig.js';
+
+function fakeConfig(values: Record<string, unknown>) {
+	return { get: (k: string, d?: unknown) => (k in values ? values[k] : d) };
+}
 
 /**
  * Guards the single-config-source refactor (Step 2): with no workspace
@@ -32,5 +37,11 @@ suite('naviConfig', () => {
 		assert.strictEqual(snapshot.mcpEnabled, false);
 		assert.strictEqual(typeof snapshot.apiKey, 'string');
 		assert.strictEqual(typeof snapshot.mcpServersJson, 'string');
+	});
+
+	test('describeApiKeySource reports a stable label', () => {
+		// With no settings key and (in CI) no env var, source is "Not configured".
+		const label = describeApiKeySource(fakeConfig({ apiKey: '' }) as any);
+		assert.match(label, /Not configured|Environment variable/);
 	});
 });

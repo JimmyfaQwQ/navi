@@ -44,6 +44,17 @@ export function resolveApiKey(config: vscode.WorkspaceConfiguration = naviConfig
 	return resolveEnvApiKey();
 }
 
+/** Human-readable source of the effective API key (settings vs env vs none). */
+export function describeApiKeySource(config: vscode.WorkspaceConfiguration = naviConfiguration()): string {
+	const configuredApiKey = resolveConfiguredApiKey(config);
+	const envApiKey = resolveEnvApiKey();
+	return configuredApiKey
+		? 'VS Code Settings (in use)'
+		: envApiKey
+			? 'Environment variable (in use)'
+			: 'Not configured';
+}
+
 export function resolveBaseUrl(config: vscode.WorkspaceConfiguration = naviConfiguration()): string {
 	const configuredBaseUrl = (config.get<string>('apiBaseUrl', DEFAULT_API_BASE_URL) ?? '').trim();
 	return configuredBaseUrl || DEFAULT_API_BASE_URL;
