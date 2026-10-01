@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="./media/navi.svg" alt="Navi logo" width="120" />
+  <img src="./media/navi.svg" alt="Navi" width="96" />
 </p>
 
 <h1 align="center">Navi</h1>
 
 <p align="center">
-  一个运行在 VS Code 里的导师型编程扩展：用任务分解、聚焦区域和可追踪执行流，引导你完成修改，而不是直接倾倒整段答案。
+  VS Code 里的编程导师：告诉你改哪里、为什么改、怎么算改完，代码由你自己写。
 </p>
 
 <p align="center">
@@ -14,370 +14,149 @@
   </a>
 </p>
 
-## Navi 是什么
+大多数 AI 编程工具会直接替你把代码写完。Navi 反过来：它读懂你的项目，把一个改动拆成几个小步骤，在编辑器里标出每一步要改的那几行，你写完之后再帮你检查。
 
-Navi 是一个基于 VS Code Webview + GitHub Copilot SDK 构建的扩展。它把聊天、任务清单、代码聚焦和子 Agent 协作放在同一个工作流里，目标不是替用户“秒出完整代码”，而是把编码过程拆成可执行、可检查、可回看的步骤。
+Navi 基于 [GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk) 构建，可以用 GitHub Copilot 订阅，也可以接任意 OpenAI 兼容的 API。
 
-当前仓库已经不是一个空壳原型，而是具备完整主链路的开发中版本：
+## 工作方式
 
-- 侧边栏 Chat 视图用于需求输入、会话切换、任务跟踪和 Agent 交互
-- Focus 视图用于展示当前待处理代码区域，并支持逐个跳转
-- 主 Agent 内置 TODO、错误读取、代码聚焦、聚焦跳转、进度同步等工具
-- 主 Agent 可委托多个子 Agent 完成代码探索、任务规划和完成度评估
-- 支持 GitHub Copilot 认证，也支持接入任意 OpenAI-compatible BYOK 服务
-- 支持通过 MCP 扩展额外工具，并提供图形化的 MCP 配置入口
+你在聊天里描述想做的改动，Navi 会：
 
-## 当前能力
+1. **读代码。** 自己搜索、阅读相关文件，必要时看诊断信息和 `git diff`。
+2. **拆任务。** 把改动拆成几个 5–10 分钟能完成的小任务，显示在输入框上方的任务列表里。
+3. **标位置。** 每次只推进一个任务：在编辑器里高亮你要改的那几行，并在聊天里说明这一步的目标、每处要怎么改、哪里容易出错、怎么算完成。
+4. **查结果。** 你改完后说一声，或在 Focus 面板里选中区域点 **Review**，Navi 会看你实际写了什么，对照要求逐条检查。通过就勾掉任务、进入下一步，不通过就指出具体缺什么。
 
-### 1. 聊天驱动的编码工作流
+问概念或者问"这段代码怎么工作的"时，它会直接回答，不走上面这套流程。
 
-Navi 不是单纯的聊天窗口。一次对话会带着以下状态一起推进：
+Navi 的主 Agent 没有写文件的权限，这一点在会话配置里强制限制，不只是靠 prompt。它可以运行只读的 shell 命令，比如 `git diff` 或跑测试。
 
-- 当前会话的消息历史
-- 当前任务 TODO 列表
-- 子 Agent 执行记录
-- 当前聚焦代码区域
-- 进度状态与阶段性提示
+## 界面
 
-这意味着你在侧边栏里看到的不只是回复文本，而是一条完整的“从理解需求到推进修改”的执行轨迹。
+Navi 在右侧的辅助侧边栏里，有两个视图：
 
-### 2. Focus Regions
+- **Navi**：聊天。包括会话列表、Agent 的执行步骤、子 Agent 的运行记录、任务列表和输入框。
+- **Focus**：当前所有高亮区域。可以按顺序逐个跳转，也可以勾选几个区域，让 Navi 讲解（**Help**）或检查（**Review**）。
 
-Navi 可以把“下一步应该改哪里”映射成明确的代码区域：
+聊天输入框左下角的按钮可以打开设置页，用来配置认证方式、模型和 MCP 服务器。也可以从命令面板打开。
 
-- 指向具体文件和行号范围
-- 在编辑器中高亮当前 focus
-- 在 Focus 面板中列出全部区域
-- 支持上一处、下一处跳转
-- 支持对选中的 focus 直接发起 Help 或 Review
+命令：
 
-如果你的任务跨多个文件，Navi 可以把它拆成多个 focus 区域，而不是只给一段模糊说明。
+| 命令 | 作用 |
+| --- | --- |
+| `Navi: New Chat` | 新建会话 |
+| `Navi: Open Settings` | 打开设置页 |
+| `Navi: Switch Focus Region` | 从列表中选择要跳转的区域 |
+| `Navi: Focus Previous Region` / `Navi: Focus Next Region` | 跳到上一个 / 下一个区域 |
 
-### 3. 内置工具链
+## 子 Agent
 
-主 Agent 当前接入了这些能力：
+探索代码、拆任务、检查改动默认都由主 Agent 自己完成，因为它有完整的对话上下文。只有三种情况会交给 Copilot CLI 内置的子 Agent：
 
-- `get_errors`: 读取当前工作区 diagnostics
-- `manage_todos`: 管理当前会话的 TODO 列表
-- `focus_user_code_region`: 创建并高亮待编辑区域
-- `clear_focus_code_region`: 清理 focus 区域
-- `get_focus_code_regions`: 读取当前会话的所有 focus
-- `jump_to_focus`: 跳转到指定或当前 focus
-- `update_progress`: 向界面同步阶段性进度
+- `explore`：问题能拆成几条互不相关的线索时，并行调查。
+- `code-review`：改动较大或风险较高，或你要求独立审查时，用全新的上下文看一遍 diff。
+- `security-review`：仅在你要求安全审查时使用。
 
-这组工具使 Navi 的执行状态是可见的，而不是“模型内部想了什么你完全不知道”。
-
-### 4. 子 Agent 协作
-
-Navi 把主 Agent 与若干子 Agent 组合在一起：
-
-- `code_explorer`（Navi 自带）：只读地探索代码库、定位实现与调用链，并通过 `update_progress` 上报里程碑进度
-- `planning_agent`（Navi 自带）：定位改动点，并把任务 TODO 写入 Navi
-- 完成度评估：委托给内置的 `critic`（默认）/ `code-review` Agent，判断改动是否满足验收标准
-
-只有主 Agent 能改动 Navi 状态（TODO、focus、进度）：在评估给出结论后，由它来完成 TODO、清理 focus 区域。
-
-子 Agent 的执行会以独立 run 的形式出现在聊天时间线中，便于回看每一步做了什么。
-
-### 5. 多会话管理
-
-聊天状态不是一次性的：
-
-- 自动创建新会话
-- 基于首条输入生成默认标题
-- 支持切换、重命名、删除会话
-- 每个会话拥有独立的 TODO 与 focus 状态
-
-### 6. 可视化设置入口
-
-除了 VS Code Settings 外，Navi 本身还提供设置面板，支持：
-
-- 切换认证模式
-- 配置 API Key / Endpoint / Model
-- 添加、编辑、启停、删除 MCP 服务器
-
-## 适用场景
-
-Navi 更适合这些场景：
-
-- 你希望 AI 先帮你厘清修改点，而不是直接重写一大片代码
-- 你在做跨文件修改，需要明确“先改哪里，再改哪里”
-- 你希望任务过程可追踪，能看到 TODO、focus 和子 Agent 执行记录
-- 你想把 Copilot SDK、MCP、Webview 工作流组合成一个实际可用的扩展原型
-
-如果你的目标只是一个最轻量的聊天补全窗口，Navi 会比那类工具更强调过程控制。
-
-## 界面概览
-
-扩展会在 Activity Bar 中注册 Navi 容器，并提供两个视图：
-
-- `Chat`: 主聊天与任务执行面板
-- `Focus`: 当前 focus 区域列表与导航面板
-
-同时还注册了几个命令：
-
-- `Navi: Switch Focus Region`
-- `Navi: Focus Previous Region`
-- `Navi: Focus Next Region`
+其余内置 Agent（比如能改文件的 `task` 和 `general-purpose`）在会话里是禁用的。子 Agent 的运行会作为独立的卡片显示在聊天里。
 
 ## 安装与运行
 
-### 环境要求
-
-- Node.js 22+
-- npm 10+
-- VS Code 1.110.0+
-
-### 安装依赖
+需要 VS Code 1.110+。开发时需要 Node.js 22.12+。
 
 ```bash
 npm install
-```
-
-### 构建扩展
-
-```bash
 npm run compile
 ```
 
-### 监听构建
+然后用 VS Code 打开项目，按 <kbd>F5</kbd> 启动扩展开发宿主，在右侧边栏打开 Navi。
+
+Copilot 运行时随 `@github/copilot-sdk` 的平台包一起安装（Windows x64 上是 `@github/copilot-sdk-win32-x64`，约 130 MB）。如果网络慢导致这个可选依赖被跳过，Navi 会提示找不到运行时。这时用更长的超时重新安装即可：
 
 ```bash
-npm run watch
+npm install --fetch-timeout=600000
 ```
 
-### 监听测试编译
+## 认证与模型
 
-```bash
-npm run watch-tests
-```
+### GitHub Copilot（默认）
 
-### 运行测试
+需要有可用的 Copilot 订阅。Navi 会先尝试使用 VS Code 里已登录的 GitHub 账号，不行再退回 Copilot CLI 的登录状态。
 
-```bash
-npm test
-```
+### 自带 API Key
 
-### 启动扩展调试
+把 `navi.authMode` 设为 `byok`，再填写 `navi.apiKey` 和 `navi.apiBaseUrl`，就能连接任意 OpenAI 兼容的服务。API Key 也可以通过环境变量 `NAVI_API_KEY` 提供。
 
-1. 用 VS Code 打开当前项目。
-2. 按 F5 启动 Extension Development Host。
-3. 在左侧 Activity Bar 中打开 Navi。
-4. 在 Chat 视图里输入需求，或在 Settings 中先完成模型配置。
+### 设置项
 
-## 认证与模型配置
-
-Navi 支持两种认证方式：
-
-### 1. Copilot 模式
-
-配置项：
-
-- `navi.authMode = copilot`
-
-说明：
-
-- 优先尝试使用 VS Code GitHub 认证会话
-- 若不可用，可回退到 Copilot SDK 的已登录用户模式
-- 适合已经具备 GitHub Copilot 使用条件的环境
-
-### 2. BYOK 模式
-
-配置项：
-
-- `navi.authMode = byok`
-- `navi.apiKey`
-- `navi.apiBaseUrl`
-- `navi.model`
-
-说明：
-
-- 通过 OpenAI-compatible 接口连接外部模型服务
-- API Key 可写入 VS Code Settings
-- 也可通过环境变量 `NAVI_API_KEY` 提供
-
-### 可配置项一览
-
-| Setting | 说明 | 默认值 |
+| 设置 | 说明 | 默认值 |
 | --- | --- | --- |
-| `navi.authMode` | 认证模式：`copilot` 或 `byok` | `copilot` |
+| `navi.authMode` | `copilot` 或 `byok` | `copilot` |
 | `navi.apiKey` | BYOK 模式的 API Key | `""` |
-| `navi.apiBaseUrl` | OpenAI-compatible 接口地址 | `https://api.openai.com/v1` |
-| `navi.model` | 模型名称 | `gpt-5-mini` |
-| `navi.streaming` | 是否启用流式会话 | `true` |
-| `navi.subagentPseudoStreamChunkSize` | 子 Agent 伪流式分块大小 | `28` |
-| `navi.subagentPseudoStreamDelayMs` | 子 Agent 伪流式分块延迟毫秒数 | `18` |
-| `navi.temperature` | 采样温度 | `0.2` |
-| `navi.recursionLimit` | 单次请求最大推理/工具步数 | `60` |
-| `navi.mcpEnabled` | 是否启用 MCP 工具 | `false` |
-| `navi.mcpServersJson` | MCP 服务器 JSON 配置 | `""` |
-| `navi.copilotCliPath` | Copilot CLI 可执行文件路径 | `""` |
-| `navi.debugCopilotCliArgs` | 输出 Copilot CLI 启动参数调试信息 | `false` |
-| `navi.debugAgentReplyFlow` | 输出 Agent 回复链路调试日志 | `false` |
-| `navi.debugAgentReplyFlowReveal` | 写入日志时自动显示输出通道 | `false` |
+| `navi.apiBaseUrl` | BYOK 模式的接口地址 | `https://api.openai.com/v1` |
+| `navi.model` | 使用的模型 | `gpt-6-luna` |
+| `navi.streaming` | 回复是否流式输出 | `true` |
+| `navi.mcpEnabled` | 是否加载 MCP 服务器提供的工具 | `false` |
+| `navi.mcpServersJson` | MCP 服务器配置（JSON） | `""` |
+| `navi.copilotCliPath` | 指定 Copilot CLI 可执行文件；留空则使用 SDK 自带的运行时 | `""` |
+| `navi.debugCopilotCliArgs` | 在 "Navi Copilot CLI" 输出通道记录 CLI 启动参数 | `false` |
+| `navi.debugAgentReplyFlow` | 在 "Navi Agent Flow" 输出通道记录完整的回复流程 | `false` |
+| `navi.debugAgentReplyFlowReveal` | 有新日志时自动打开 "Navi Agent Flow" 输出通道 | `false` |
 
-### Windows 上的 Copilot CLI 说明
+## MCP
 
-在部分环境中，Copilot CLI 可执行文件可能无法被自动定位。此时可以手动设置：
-
-```json
-{
-  "navi.copilotCliPath": "node_modules/@github/copilot-win32-x64/copilot.exe"
-}
-```
-
-如果要排查 CLI 启动参数，可以开启：
-
-```json
-{
-  "navi.debugCopilotCliArgs": true
-}
-```
-
-## MCP 配置
-
-Navi 支持从 MCP 服务器加载额外工具。
-
-你可以直接通过 Navi 的 MCP Settings 面板完成添加和管理，也可以手动编辑 `navi.mcpServersJson`。
-
-### 最小示例：stdio
+在设置页的 **MCP servers** 里可以添加、启停和删除服务器，也可以直接编辑 `navi.mcpServersJson`：
 
 ```json
 {
   "math": {
-    "enabled": true,
-    "transport": "stdio",
+    "type": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-math"]
+    "args": ["-y", "@modelcontextprotocol/server-math"],
+    "tools": ["*"]
+  },
+  "docs": {
+    "type": "http",
+    "url": "https://example.com/mcp",
+    "enabled": false
   }
 }
 ```
 
-### 最小示例：http
+- `enabled: false` 的服务器不会加载。
+- stdio 服务器可以用 `workingDirectory` 指定工作目录。旧配置里的 `cwd` 字段仍然有效。
+- 还需要打开总开关 `navi.mcpEnabled`。
 
-```json
-{
-  "remote-toolkit": {
-    "enabled": true,
-    "transport": "http",
-    "url": "https://example.com/mcp"
-  }
-}
-```
-
-说明：
-
-- `enabled: false` 的服务器不会被加载
-- `stdio` 支持 `command`、`args`，以及可选的 `cwd`
-- `http` 使用远端 MCP URL
-- 全局开关由 `navi.mcpEnabled` 控制
-
-## 开发工作流
-
-### 常用脚本
+## 开发
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run compile` | Webpack 构建扩展代码 |
-| `npm run watch` | 监听扩展代码变更 |
+| `npm run compile` | 用 webpack 构建扩展和三个 webview |
+| `npm run watch` | 监听源码并重新构建 |
+| `npm run compile-tests` | 把测试编译到 `out/` |
+| `npm run lint` | 运行 ESLint |
+| `npm test` | 编译、构建、lint，然后在 VS Code 里运行测试 |
 | `npm run package` | 生产模式打包 |
-| `npm run compile-tests` | 编译测试代码到 `out/` |
-| `npm run watch-tests` | 监听测试代码变更 |
-| `npm run lint` | 对 `src/` 运行 ESLint |
-| `npm test` | 编译、构建、lint 并运行 VS Code 扩展测试 |
 
-### 推荐本地开发方式
+`npm test` 默认会下载最新版 VS Code 来运行测试。如果下载失败，可以指定一个已缓存的版本：`npx vscode-test --code-version <版本号>`。
 
-1. 运行 `npm install`
-2. 启动 `npm run watch`
-3. 需要测试联动时再启动 `npm run watch-tests`
-4. 按 F5 打开 Extension Development Host
-5. 在开发宿主里实际操作 Chat / Focus / Settings
-
-## 测试覆盖
-
-当前测试并不只覆盖纯工具函数，还覆盖了这几个核心面：
-
-- 会话状态管理
-- 自定义 Agent 定义
-- TODO 管理工具
-- focus 创建、读取、跳转、清理工具
-- 错误读取工具
-- Chat / Focus Webview HTML 输出
-- 消息与 ID 工具函数
-
-这意味着 README 里提到的主交互链路，大部分在仓库里已经有测试约束，而不是仅存在于文档设想中。
-
-## 项目结构
+### 代码结构
 
 ```text
 src/
-  agent/
-    agents/              # 自定义子 Agent 定义
-    tools/               # 主 Agent 可调用的内置工具
-    chatGateway.ts       # Copilot SDK 会话管理与流式回复
-    config.ts            # 主系统提示词与 focus action prompt
-    mainAgent.ts         # 主 Agent 装配
-    modelFactory.ts      # Copilot/BYOK 客户端与模型配置
-  chat/
-    sessionStore.ts        # 多会话、消息、run、todo 状态管理
-    chatViewProvider.ts    # Chat WebviewViewProvider（注册 navi.chatWebview）
-    inboundRouter.ts       # chat:* 入站消息路由
-    generationController.ts# 生成生命周期、abort/cancel、持有 chat gateway
-    subagentRunTracker.ts  # 子 Agent run 追踪（4 个 Map + 会话事件处理）
-    chatMessenger.ts       # 所有 chat:* 出站消息（唯一线协议出口）
-  focus/
-    focusController.ts     # focus 区域状态与全部操作
-    focusDecorations.ts    # 编辑器高亮装饰
-    focusStatusBar.ts      # focus 状态栏项
-    focusViewProvider.ts   # Focus WebviewViewProvider + focus:* 路由
-  mcp/
-    config.ts            # MCP 配置解析与序列化
-    settingsManager.ts   # MCP 图形化设置入口
-  settings/
-    settingsManager.ts   # LLM / MCP 设置入口
-  types/
-    chat.ts              # 聊天、run、focus 等核心类型
-  utils/
-    id.ts
-    math.ts              # clampInteger 等纯工具
-    message.ts
-  webview/
-    chat/                # Chat Webview：{ view, render, state, html }.ts
-      view.ts            #   入口：DOM 绑定 + 入站消息分发
-      render.ts          #   渲染：markdown/代码块/run 面板/会话抽屉
-      state.ts           #   视图状态对象 + 类型 + 常量 + DOM 引用
-      html.ts            #   Chat HTML 模板（Node 侧，getChatHtml）
-    focus/               # Focus Webview：{ view, render, state, html }.ts
-      view.ts
-      render.ts
-      state.ts
-      html.ts            #   Focus HTML 模板（getFocusHtml）
-  extension.ts           # 精简的激活/装配入口（activate 仅做构造与接线）
-media/
-  navi.svg
-  navi.css               # 共享基础样式（tokens / a11y / 图标按钮 / focus 卡片）
-  chat.css               # Chat 视图专属样式
-  focus.css              # Focus 视图专属样式
-test/
-  *.test.ts             # 单测与扩展测试
+  extension.ts        激活入口，负责组装各模块
+  prompts/            系统 prompt 和 Focus 按钮发出的消息
+  agent/              Copilot SDK 客户端、会话、事件映射
+    agents/           子 Agent 的委托策略和禁用列表
+    tools/            Navi 自己的工具：任务、Focus 区域、诊断、进度
+  chat/               聊天视图的宿主侧：会话存储、生成流程、子 Agent 运行记录
+  focus/              Focus 区域的状态、编辑器高亮、状态栏、Focus 视图
+  settings/           配置读取、模型列表、设置页
+  mcp/                MCP 配置的解析与转换
+  webview/            三个 webview 的前端代码（chat / focus / settings）
+  test/               测试
+media/                webview 样式和图标
 ```
 
-## 当前边界与注意事项
+## 许可证
 
-- 这是一个正在持续迭代的扩展，不应把 README 理解成“所有工作流都已经彻底产品化”
-- 主体交互已经可用，但策略质量仍明显依赖底层模型和提示词设计
-- 在 Copilot 模式下，CLI 解析与宿主环境差异仍然是需要重点排查的兼容点
-- MCP 配置错误时不会静默修复，建议先从最小可运行配置开始验证
-
-## 这个仓库适合继续做什么
-
-- 打磨导师型 Agent 的执行策略
-- 扩展 focus 驱动的编辑器交互
-- 继续增强子 Agent 协作和结果可视化
-- 完善 BYOK / Copilot / MCP 三条配置链路的稳定性
-- 继续补测试，减少行为回归
-
-## License
-
-仓库当前没有附带 LICENSE 文件。如果你准备对外发布或分发，请先补充明确的许可证。
+本仓库目前没有许可证文件。对外发布前请先补充。
