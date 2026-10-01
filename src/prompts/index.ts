@@ -1,35 +1,13 @@
 import type { ChatFocusTarget } from '../types/chat';
-import { CODE_EXPLORER_AGENT_SYSTEM_PROMPT, PLANNING_AGENT_SYSTEM_PROMPT } from './agents.js';
 import { SYSTEM_PROMPT, buildFocusActionPrompt, type FocusAction } from './main.js';
 
 export { SYSTEM_PROMPT, buildFocusActionPrompt } from './main.js';
 export type { FocusAction } from './main.js';
-export { CODE_EXPLORER_AGENT_SYSTEM_PROMPT, PLANNING_AGENT_SYSTEM_PROMPT } from './agents.js';
 export { SECTION_RULE, composeSections, withWorkingDirectory } from './fragments.js';
-
-/**
- * Identifier for a custom sub-agent system prompt. Navi ships the exploration
- * and planning agents; review is delegated to the built-in `critic` /
- * `code-review` agents instead.
- */
-export type PromptId = 'exploration' | 'planning';
-
-const AGENT_PROMPTS: Record<PromptId, string> = {
-	exploration: CODE_EXPLORER_AGENT_SYSTEM_PROMPT,
-	planning: PLANNING_AGENT_SYSTEM_PROMPT
-};
-
-/** Return a sub-agent system prompt by id. */
-export function agentPrompt(id: PromptId): string {
-	return AGENT_PROMPTS[id];
-}
 
 export type FocusActionContext = { targets: ChatFocusTarget[]; action: FocusAction };
 
-/**
- * Single entry point for loading top-level prompts. Sub-agent prompts are
- * loaded via {@link agentPrompt}.
- */
+/** Single entry point for loading prompts. */
 export function loadPrompt(id: 'system'): string;
 export function loadPrompt(id: 'focusAction', ctx: FocusActionContext): { preview: string; prompt: string };
 export function loadPrompt(

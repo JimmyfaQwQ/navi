@@ -1,85 +1,73 @@
 import * as assert from 'assert';
-import { createHash } from 'node:crypto';
-import {
-	SYSTEM_PROMPT,
-	agentPrompt,
-	loadPrompt,
-	withWorkingDirectory
-} from '../prompts/index.js';
+import { SYSTEM_PROMPT, loadPrompt, withWorkingDirectory } from '../prompts/index.js';
+import { DELEGATE_AGENTS, EXCLUDED_BUILTIN_AGENTS } from '../agent/agents/builtinAgents.js';
+import { TOOL_NAMES } from '../agent/tools/names.js';
 import type { ChatFocusTarget } from '../types/chat';
 
-function shortHash(text: string): string {
-	return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16);
+function target(overrides: Partial<ChatFocusTarget> = {}): ChatFocusTarget {
+	return {
+		id: 'focus-1',
+		sessionId: 'thread-1',
+		path: 'src/a.ts',
+		startLine: 10,
+		endLine: 20,
+		title: 'Guard empty input',
+		instruction: 'Return early when input is empty.',
+		updatedAt: 0,
+		...overrides
+	};
 }
 
 suite('prompts', () => {
-	test('system prompt encodes the delegation contract and mentor identity', () => {
-		assert.ok(SYSTEM_PROMPT.length > 0);
+	test('system prompt references every Navi tool by its registered name', () => {
 		assert.strictEqual(loadPrompt('system'), SYSTEM_PROMPT);
-
-		// Mentor identity + the agents the main agent delegates to by name.
-		assert.match(SYSTEM_PROMPT, /Navi is a mentor/);
-		for (const agentName of ['code_explorer', 'planning_agent', 'critic', 'code-review']) {
-			assert.ok(
-				SYSTEM_PROMPT.includes(agentName),
-				`system prompt should name the "${agentName}" delegation target`
-			);
-		}
-
-		// Navi-state tools the main agent owns for focus + wrap-up.
-		for (const toolName of ['focus_user_code_region', 'clear_focus_code_region', 'manage_todos', 'update_progress']) {
-			assert.ok(SYSTEM_PROMPT.includes(toolName), `system prompt should reference ${toolName}`);
+		for (const toolName of Object.values(TOOL_NAMES)) {
+			assert.ok(SYSTEM_PROMPT.includes(`\`${toolName}\``), `system prompt should reference ${toolName}`);
 		}
 	});
 
-	test('exploration prompt reads code and reports progress', () => {
-		const exploration = agentPrompt('exploration');
-
-		assert.ok(exploration.length > 0);
-		assert.ok(exploration.includes('update_progress'), 'explorer should report milestone progress');
-		for (const readTool of ['view', 'grep', 'glob', 'lsp']) {
-			assert.ok(exploration.includes(readTool), `exploration prompt should use the ${readTool} tool`);
+	test('system prompt only delegates to agents the session allows', () => {
+		for (const agentName of Object.values(DELEGATE_AGENTS)) {
+			assert.ok(SYSTEM_PROMPT.includes(`\`${agentName}\``), `system prompt should name ${agentName}`);
 		}
-	});
-
-	test('planning prompt writes todos and can read code', () => {
-		const planning = agentPrompt('planning');
-
-		assert.ok(planning.length > 0);
-		assert.match(planning, /planning agent/i);
-		assert.ok(planning.includes('manage_todos'), 'planning prompt should write via manage_todos');
-		for (const readTool of ['view', 'grep', 'glob', 'lsp']) {
-			assert.ok(planning.includes(readTool), `planning prompt should use the ${readTool} tool`);
+		for (const excluded of EXCLUDED_BUILTIN_AGENTS) {
+			assert.ok(!SYSTEM_PROMPT.includes(`\`${excluded}\``), `system prompt should not name excluded agent ${excluded}`);
 		}
-		assert.ok(planning.includes('acceptance'), 'planning prompt should define acceptance criteria');
+		// Retired agents must not linger in the prompt.
+		for (const retired of ['code_explorer', 'planning_agent', 'critic']) {
+			assert.ok(!SYSTEM_PROMPT.includes(retired), `system prompt should not mention ${retired}`);
+		}
 	});
 
 	test('withWorkingDirectory injects the cwd and is a no-op without one', () => {
-		const cwd = 'E:/navi';
-		const withCwd = withWorkingDirectory('SYSTEM BODY', cwd);
-
+		const withCwd = withWorkingDirectory('SYSTEM BODY', 'E:/navi');
 		assert.ok(withCwd.startsWith('SYSTEM BODY'));
-		assert.ok(withCwd.includes(cwd), 'should state the working directory');
-		assert.match(withCwd, /Working directory/i);
-
-		// No workspace open → prompt is returned unchanged.
+		assert.ok(withCwd.includes('E:/navi'));
+		assert.match(withCwd, /Shell: /);
 		assert.strictEqual(withWorkingDirectory('SYSTEM BODY', undefined), 'SYSTEM BODY');
 	});
 
-	test('focus-action prompt is byte-identical to the established builder output', () => {
-		const target: ChatFocusTarget = {
-			id: 'focus-1',
-			sessionId: 'thread-1',
-			path: 'a.ts',
-			startLine: 1,
-			endLine: 2,
-			title: 'T',
-			instruction: 'I',
-			updatedAt: 0
-		};
-		const { preview, prompt } = loadPrompt('focusAction', { targets: [target], action: 'review' });
-		assert.strictEqual(preview, 'Please Review the 1 Focus regions I selected.');
-		assert.strictEqual(prompt.length, 221);
-		assert.strictEqual(shortHash(prompt), 'f19a8dfa1d3d712b');
+	test('focus-action prompts carry region ids and locations', () => {
+		const targets = [target(), target({ id: 'focus-2', path: 'src/b.ts', startLine: 3, endLine: 4, title: '', instruction: '' })];
+
+		const review = loadPrompt('focusAction', { targets, action: 'review' });
+		assert.strictEqual(review.preview, 'Review my work in 2 focus regions');
+		assert.match(review.prompt, /\[focus-1\] src\/a\.ts:10-20/);
+		assert.match(review.prompt, /\[focus-2\] src\/b\.ts:3-4/);
+		assert.match(review.prompt, /Instruction: Return early when input is empty\./);
+		// Empty title / instruction lines are omitted rather than printed as "None".
+		assert.ok(!review.prompt.includes('None'));
+
+		const help = loadPrompt('focusAction', { targets: [target()], action: 'help' });
+		assert.strictEqual(help.preview, 'Help me with 1 focus region');
+		assert.match(help.prompt, /\[focus-1\] src\/a\.ts:10-20/);
+	});
+
+	test('button messages identify their origin so they do not switch the reply language', () => {
+		const review = loadPrompt('focusAction', { targets: [target()], action: 'review' });
+		const help = loadPrompt('focusAction', { targets: [target()], action: 'help' });
+		assert.match(review.prompt, /Sent from the Focus panel's Review button/);
+		assert.match(help.prompt, /Sent from the Focus panel's Help button/);
+		assert.match(SYSTEM_PROMPT, /sent from the Focus panel/);
 	});
 });

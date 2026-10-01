@@ -3,6 +3,7 @@ import { approveAll } from '@github/copilot-sdk';
 import type { CopilotClient, CustomAgentConfig, MCPServerConfig, Tool } from '@github/copilot-sdk';
 import { SYSTEM_PROMPT, withWorkingDirectory } from '../prompts/index.js';
 import { logAgentFlow } from './debugLogger.js';
+import { EXCLUDED_BUILTIN_AGENTS, EXCLUDED_BUILTIN_TOOLS } from './agents/builtinAgents.js';
 import { resolveMcpEnabled, resolveMcpServersJson, resolveModel, resolveStreaming } from '../settings/naviConfig.js';
 import { resolveProvider } from './modelFactory.js';
 import { parseMcpServerSettings, toEnabledMcpConnections } from '../mcp/config.js';
@@ -52,6 +53,8 @@ export function buildSessionConfig(tools: NaviTool[], customAgents?: CustomAgent
 		tools: sdkTools,
 		mcpServers,
 		customAgents: resolvedCustomAgents,
+		excludedTools: EXCLUDED_BUILTIN_TOOLS,
+		excludedBuiltinAgents: EXCLUDED_BUILTIN_AGENTS,
 		onPermissionRequest: approveAll,
 		systemMessage: {
 			mode: 'replace',

@@ -1,5 +1,4 @@
 import type { ChatFocusTarget, ChatTodo } from '../types/chat';
-import { createMainCustomAgents } from './agents/customAgents.js';
 import { NaviChatGateway } from './gateway.js';
 import { CopilotProvider } from './provider/CopilotProvider.js';
 import { createClearFocusCodeRegionTool, type ClearFocusCodeRegionInput } from './tools/clearFocusCodeRegionTool.js';
@@ -78,7 +77,6 @@ export function createMainChatGateway(deps: MainAgentDeps): NaviChatGateway {
 				replaceTodos: deps.replaceTodos,
 				onTodosChanged: deps.onTodosChanged
 			})
-		],
-		createMainCustomAgents()
+		]
 	));
 }

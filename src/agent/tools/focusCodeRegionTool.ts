@@ -4,6 +4,9 @@ import type { NaviTool } from '../naviTool';
 import { errorResult, parseInput, successResult } from './_shared.js';
 import { fileExists, getWorkspaceRoot } from './editorGateway.js';
 
+/** Regions longer than this get a nudge back to the agent to narrow them. */
+export const WIDE_REGION_LINES = 15;
+
 export type FocusCodeRegionInput = {
 	path?: string;
 	startLine?: number;
@@ -23,7 +26,11 @@ export function createFocusCodeRegionTool(deps: FocusCodeRegionDeps): NaviTool {
 	return {
 		name: 'focus_user_code_region',
 		description:
-			'Reveal and highlight where the user should write code next. Use this when assigning coding steps. Input JSON: {"path":"src/file.ts","startLine":10,"endLine":18,"title":"Next coding task","instruction":"Implement the logic here"}.',
+			'Highlight the exact lines the user should edit next and reveal them in the editor. ' +
+				'Cover only the lines that change, usually 1-10; for new code, cover the line(s) where it goes. ' +
+				'Use one region per edit site, even within the same function, instead of one region around the whole function. ' +
+				'Put context (which function, why) in title and instruction, not in the highlighted range. ' +
+				'Input JSON: {"path":"src/file.ts","startLine":42,"endLine":44,"title":"Clamp texture coordinates","instruction":"Clamp tx and ty to the texture bounds before get_pixel"}.',
 		func: async (rawInput: string) => {
 			const workspaceRoot = resolveWorkspaceRoot();
 			if (!workspaceRoot) {
@@ -52,9 +59,17 @@ export function createFocusCodeRegionTool(deps: FocusCodeRegionDeps): NaviTool {
 				path: normalizedPath
 			});
 
+			const lineCount = focused.endLine - focused.startLine + 1;
 			return successResult({
 				sessionId,
-				focusTarget: focused
+				focusTarget: focused,
+				...(lineCount > WIDE_REGION_LINES
+					? {
+						note:
+							`This region spans ${lineCount} lines. If the user edits only part of it, clear it ` +
+							'and create narrower regions around the lines that actually change.'
+					}
+					: {})
 			});
 		}
 	};

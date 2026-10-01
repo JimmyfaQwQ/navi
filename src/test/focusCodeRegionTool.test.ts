@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { createFocusCodeRegionTool } from '../agent/tools/focusCodeRegionTool.js';
+import { WIDE_REGION_LINES, createFocusCodeRegionTool } from '../agent/tools/focusCodeRegionTool.js';
 import type { ChatFocusTarget } from '../types/chat';
 
 suite('createFocusCodeRegionTool', () => {
@@ -68,6 +68,37 @@ suite('createFocusCodeRegionTool', () => {
 			assert.strictEqual(payload.sessionId, 'session-b');
 			assert.strictEqual(capturedPath, 'src/demo.ts');
 			assert.strictEqual(payload.focusTarget.path, 'src/demo.ts');
+		} finally {
+			await fs.rm(workspaceRoot, { recursive: true, force: true });
+		}
+	});
+
+	test('nudges the agent to narrow wide regions but still creates them', async () => {
+		const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'navi-focus-'));
+		await fs.writeFile(path.join(workspaceRoot, 'demo.ts'), 'x\n', 'utf8');
+		const tool = createFocusCodeRegionTool({
+			getCurrentSessionId: () => 'session-c',
+			focusRegion: async (sessionId, input) => ({
+				id: 'focus-w',
+				sessionId,
+				path: input.path ?? '',
+				startLine: input.startLine ?? 1,
+				endLine: input.endLine ?? 1,
+				title: '',
+				instruction: '',
+				updatedAt: 0
+			}),
+			resolveWorkspaceRoot: () => workspaceRoot
+		});
+
+		try {
+			const narrow = JSON.parse(await tool.func(`{"path":"demo.ts","startLine":10,"endLine":${9 + WIDE_REGION_LINES}}`));
+			assert.strictEqual(narrow.ok, true);
+			assert.strictEqual(narrow.note, undefined);
+
+			const wide = JSON.parse(await tool.func('{"path":"demo.ts","startLine":10,"endLine":43}'));
+			assert.strictEqual(wide.ok, true);
+			assert.match(wide.note, /spans 34 lines/);
 		} finally {
 			await fs.rm(workspaceRoot, { recursive: true, force: true });
 		}
