@@ -7,6 +7,8 @@ import {
 	focusNextBtn,
 	focusReviewSelectedBtn,
 	focusHelpSelectedBtn,
+	focusSelectionLabel,
+	focusFooter,
 	state
 } from './state.js';
 
@@ -19,10 +21,40 @@ export function getSelectedTargetIds(): string[] {
 export function refreshFooter(): void {
 	const selectedCount = getSelectedTargetIds().length;
 	const totalCount = state.focusTargets.length;
-	focusReviewSelectedBtn.textContent = `Review (${selectedCount}/${totalCount})`;
-	focusHelpSelectedBtn.textContent = `Help (${selectedCount}/${totalCount})`;
 	focusReviewSelectedBtn.disabled = selectedCount === 0;
 	focusHelpSelectedBtn.disabled = selectedCount === 0;
+	focusReviewSelectedBtn.setAttribute('aria-label', `Review ${selectedCount} of ${totalCount} selected regions`);
+	focusHelpSelectedBtn.setAttribute('aria-label', `Get help on ${selectedCount} of ${totalCount} selected regions`);
+	if (focusSelectionLabel) {
+		focusSelectionLabel.textContent = selectedCount === 0 ? T.selectionNone : T.selectionCount(selectedCount);
+	}
+	focusFooter?.classList.toggle('has-selection', selectedCount > 0);
+	focusFooter?.classList.toggle('hidden', totalCount === 0);
+}
+
+function renderEmpty(): void {
+	const empty = document.createElement('div');
+	empty.className = 'focus-empty';
+	const title = document.createElement('p');
+	title.className = 'focus-empty-title';
+	title.textContent = T.emptyTitle;
+	const body = document.createElement('p');
+	body.className = 'focus-empty-body';
+	body.textContent = T.emptyBody;
+	empty.append(title, body);
+	focusList.appendChild(empty);
+}
+
+function actionButton(label: string, className: string, ariaLabel: string, type: string, targetId: string): HTMLButtonElement {
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.className = `focus-target-action ${className}`;
+	button.textContent = label;
+	button.setAttribute('aria-label', ariaLabel);
+	button.addEventListener('click', () => {
+		vscode.postMessage({ type, sessionId: state.currentSessionId, focusTargetId: targetId });
+	});
+	return button;
 }
 
 export function render(): void {
@@ -34,6 +66,7 @@ export function render(): void {
 		focusSummary.textContent = T.emptySummary;
 		focusPrevBtn.disabled = true;
 		focusNextBtn.disabled = true;
+		renderEmpty();
 		refreshFooter();
 		return;
 	}
@@ -47,7 +80,17 @@ export function render(): void {
 		card.className = 'focus-target-card';
 		if (index === state.activeIndex) {
 			card.classList.add('focus-target-card-active');
+			card.setAttribute('aria-current', 'true');
 		}
+
+		// Waypoint number: regions are an ordered route that Prev / Next walks through.
+		const marker = document.createElement('span');
+		marker.className = 'focus-target-index';
+		marker.textContent = String(index + 1);
+		marker.setAttribute('aria-hidden', 'true');
+
+		const main = document.createElement('div');
+		main.className = 'focus-target-main';
 
 		const topRow = document.createElement('div');
 		topRow.className = 'focus-target-top-row';
@@ -55,21 +98,29 @@ export function render(): void {
 		const title = document.createElement('div');
 		title.className = 'focus-target-title';
 		title.textContent = target.title || T.untitledRegion;
+		if (!target.title) {
+			title.classList.add('untitled');
+		}
 
 		const toggleWrap = document.createElement('label');
 		toggleWrap.className = 'focus-target-checkbox-wrap';
+		toggleWrap.title = 'Select';
 
 		const checkbox = document.createElement('input');
 		checkbox.type = 'checkbox';
+		checkbox.className = 'focus-target-checkbox';
 		checkbox.checked = state.selectedTargetIds.has(target.id);
+		checkbox.setAttribute('aria-label', `Select ${title.textContent}`);
 		checkbox.addEventListener('change', () => {
 			if (checkbox.checked) {
 				state.selectedTargetIds.add(target.id);
 			} else {
 				state.selectedTargetIds.delete(target.id);
 			}
+			card.classList.toggle('selected', checkbox.checked);
 			refreshFooter();
 		});
+		card.classList.toggle('selected', checkbox.checked);
 
 		toggleWrap.appendChild(checkbox);
 		topRow.appendChild(title);
@@ -77,7 +128,9 @@ export function render(): void {
 
 		const location = document.createElement('div');
 		location.className = 'focus-target-location';
-		location.textContent = `${target.path} · L${target.startLine} - L${target.endLine}`;
+		const lines = target.startLine === target.endLine ? `${target.startLine}` : `${target.startLine}–${target.endLine}`;
+		location.textContent = `${target.path}:${lines}`;
+		location.title = target.path;
 
 		const instruction = document.createElement('div');
 		instruction.className = 'focus-target-instruction';
@@ -87,54 +140,15 @@ export function render(): void {
 		actionRow.className = 'focus-target-action-row';
 
 		const titleLabel = title.textContent || T.untitledRegion;
-		const locationLabel = location.textContent || '';
+		const locationLabel = `${target.path}, lines ${target.startLine} to ${target.endLine}`;
 
-		const jumpButton = document.createElement('button');
-		jumpButton.type = 'button';
-		jumpButton.className = 'focus-target-jump';
-		jumpButton.textContent = T.jump;
-		jumpButton.setAttribute('aria-label', T.jumpAria(titleLabel, locationLabel));
-		jumpButton.addEventListener('click', () => {
-			vscode.postMessage({
-				type: 'focus:revealById',
-				sessionId: state.currentSessionId,
-				focusTargetId: target.id
-			});
-		});
-
-		const helpButton = document.createElement('button');
-		helpButton.type = 'button';
-		helpButton.className = 'focus-target-jump focus-help-btn';
-		helpButton.textContent = T.help;
-		helpButton.setAttribute('aria-label', T.helpAria(titleLabel));
-		helpButton.addEventListener('click', () => {
-			vscode.postMessage({
-				type: 'focus:helpById',
-				sessionId: state.currentSessionId,
-				focusTargetId: target.id
-			});
-		});
-
-		const reviewButton = document.createElement('button');
-		reviewButton.type = 'button';
-		reviewButton.className = 'focus-target-jump focus-review-btn';
-		reviewButton.textContent = T.review;
-		reviewButton.setAttribute('aria-label', T.reviewAria(titleLabel));
-		reviewButton.addEventListener('click', () => {
-			vscode.postMessage({
-				type: 'focus:reviewById',
-				sessionId: state.currentSessionId,
-				focusTargetId: target.id
-			});
-		});
-
-		actionRow.appendChild(jumpButton);
-		actionRow.appendChild(helpButton);
-		actionRow.appendChild(reviewButton);
-		card.appendChild(topRow);
-		card.appendChild(location);
-		card.appendChild(instruction);
-		card.appendChild(actionRow);
+		actionRow.append(
+			actionButton(T.jump, 'focus-target-jump', T.jumpAria(titleLabel, locationLabel), 'focus:revealById', target.id),
+			actionButton(T.help, 'focus-help-btn', T.helpAria(titleLabel), 'focus:helpById', target.id),
+			actionButton(T.review, 'focus-review-btn', T.reviewAria(titleLabel), 'focus:reviewById', target.id)
+		);
+		main.append(topRow, location, instruction, actionRow);
+		card.append(marker, main);
 		focusList.appendChild(card);
 	});
 	refreshFooter();

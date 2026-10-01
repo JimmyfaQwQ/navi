@@ -26,11 +26,15 @@ declare function acquireVsCodeApi(): {
 
 // User-facing strings, centralized for easy future localization.
 export const T = {
-	emptySummary: 'No focus regions yet',
-	summary: (total: number, current: number) => `${total} focus regions · viewing ${current} of ${total}`,
+	emptySummary: '',
+	summary: (total: number, current: number) => (current > 0 ? `${current} of ${total}` : `${total}`),
+	emptyTitle: 'No focus regions yet',
+	emptyBody: 'When Navi wants you to look at specific code, it marks the region here so you can jump straight to it.',
+	selectionNone: 'Select regions to act on several at once',
+	selectionCount: (count: number) => `${count} selected`,
 	untitledRegion: 'Untitled region',
 	defaultInstruction: 'Continue the current task in this region.',
-	jump: 'Jump',
+	jump: 'Jump to code',
 	help: 'Help',
 	review: 'Review',
 	jumpAria: (title: string, location: string) => `Jump to ${title}, ${location}`,
@@ -54,6 +58,8 @@ export const focusPrevBtn = requireElement<HTMLButtonElement>('#focusPrevBtn');
 export const focusNextBtn = requireElement<HTMLButtonElement>('#focusNextBtn');
 export const focusReviewSelectedBtn = requireElement<HTMLButtonElement>('#focusReviewSelectedBtn');
 export const focusHelpSelectedBtn = requireElement<HTMLButtonElement>('#focusHelpSelectedBtn');
+export const focusSelectionLabel = document.querySelector<HTMLSpanElement>('#focusSelectionLabel');
+export const focusFooter = document.querySelector<HTMLDivElement>('#focusFooter');
 
 // Single mutable view-state object shared by render.ts and view.ts.
 export const state = {

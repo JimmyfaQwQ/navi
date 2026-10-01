@@ -12,11 +12,10 @@ suite('getChatHtml', () => {
 
 		const html = getChatHtml(webview, extensionUri);
 		assert.ok(html.includes('<title>Navi Chat</title>'));
-		assert.ok(
-			html.includes(
-				'What would you like to build today? Paste your requirements, errors, or related code; I will first read the project context and synchronize the current progress in the chat area, then give you the next actionable step.'
-			)
-		);
+		assert.ok(html.includes('data-welcome-message="true"'));
+		assert.ok(html.includes('What would you like to build today?'));
+		assert.ok(html.includes('id="sessionDrawer"'));
+		assert.ok(html.includes('id="drawerSearch"'));
 		assert.ok(html.includes('id="todoPanel"'));
 		assert.ok(!html.includes('id="focusTargetSlot"'));
 		assert.ok(html.includes('id="toolCallSlot"'));

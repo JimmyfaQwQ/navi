@@ -155,6 +155,11 @@ declare function acquireVsCodeApi(): {
 	getState?(): unknown;
 };
 
+// Keep in sync with the static welcome block in html.ts.
+export const WELCOME_TITLE = 'What would you like to build today?';
+export const WELCOME_BODY =
+	'Paste your requirements, errors, or related code. Navi reads the project first, shows its progress here, then gives you the next step.';
+// Legacy single-paragraph welcome, still matched so old sessions drop it cleanly.
 export const DEFAULT_WELCOME_MESSAGE =
 	'What would you like to build today? Paste your requirements, errors, or related code; I will first read the project context and synchronize the current progress in the chat area, then give you the next actionable step.';
 export const DEFAULT_EMPTY_ASSISTANT_MESSAGE = 'I have not generated any displayable text response yet.';
@@ -166,12 +171,14 @@ export const COLLAPSE_TRANSITION_MS = 240;
 export const T = {
 	runStatus: { running: 'Running', completed: 'Done', cancelled: 'Cancelled', failed: 'Failed' },
 	durationSuffix: 's',
-	running: (duration: string) => `${duration} elapsed`,
-	took: (duration: string) => `Took ${duration}`,
+	running: (duration: string) => `for ${duration}`,
+	took: (duration: string) => `in ${duration}`,
 	expand: 'Expand',
 	collapse: 'Collapse',
-	progressCollapsed: (count: number) => `Progress (${count}) — click to expand`,
-	progressExpanded: (count: number) => `Progress (${count}) — click to collapse`,
+	progressCollapsed: (count: number) => `${count} ${count === 1 ? 'step' : 'steps'}`,
+	progressExpanded: (count: number) => `${count} ${count === 1 ? 'step' : 'steps'}`,
+	renameSession: (title: string) => `Rename ${title}`,
+	deleteSession: (title: string) => `Delete ${title}`,
 	requestNotProcessed: 'Request was not processed. Please try again.',
 	requestFailed: 'Request failed',
 	copyCodeAria: (language: string) => `Copy ${language} code block`
@@ -203,6 +210,7 @@ export const sessionDrawer = requireElement<HTMLDivElement>('#sessionDrawer');
 export const sessionDrawerOverlay = requireElement<HTMLDivElement>('#sessionDrawerOverlay');
 export const drawerSearch = requireElement<HTMLInputElement>('#drawerSearch');
 export const sessionList = requireElement<HTMLDivElement>('#sessionList');
+export const sessionEmpty = document.querySelector<HTMLDivElement>('#sessionEmpty');
 export const activeSessionLabel = document.querySelector<HTMLDivElement>('#activeSessionLabel');
 export const toolCallSlot = requireElement<HTMLDivElement>('#toolCallSlot');
 export const loading = requireElement<HTMLDivElement>('#loading');

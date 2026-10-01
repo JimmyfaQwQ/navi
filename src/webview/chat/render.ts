@@ -3,6 +3,8 @@ import hljs from 'highlight.js/lib/common';
 import MarkdownIt from 'markdown-it';
 import {
 	DEFAULT_WELCOME_MESSAGE,
+	WELCOME_TITLE,
+	WELCOME_BODY,
 	DEFAULT_EMPTY_ASSISTANT_MESSAGE,
 	CHAT_BOTTOM_STICKY_THRESHOLD_PX,
 	TODO_BOTTOM_STICKY_THRESHOLD_PX,
@@ -26,6 +28,7 @@ import {
 	sessionDrawerOverlay,
 	drawerSearch,
 	sessionList,
+	sessionEmpty,
 	activeSessionLabel,
 	toolCallSlot,
 	loading,
@@ -277,9 +280,94 @@ export function appendMessage(role: ChatRole, text: string, smoothScrollToBottom
 	return el;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgIcon(className: string, viewBox: string, children: Array<[string, Record<string, string>]>): SVGSVGElement {
+	const svg = document.createElementNS(SVG_NS, 'svg');
+	svg.setAttribute('class', className);
+	svg.setAttribute('viewBox', viewBox);
+	svg.setAttribute('fill', 'none');
+	svg.setAttribute('aria-hidden', 'true');
+	children.forEach(([tag, attrs]) => {
+		const node = document.createElementNS(SVG_NS, tag);
+		Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+		svg.appendChild(node);
+	});
+	return svg;
+}
+
+const STROKE = { stroke: 'currentColor', 'stroke-width': '1.3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
+
+function chevronIcon(className: string): SVGSVGElement {
+	return svgIcon(className, '0 0 12 12', [['path', { d: 'M3 4.5L6 7.5L9 4.5', ...STROKE, 'stroke-width': '1.4' }]]);
+}
+
+function pencilIcon(): SVGSVGElement {
+	return svgIcon('navi-icon', '0 0 16 16', [['path', { d: 'M10.5 3.5l2 2L6 12H4v-2l6.5-6.5z', ...STROKE }]]);
+}
+
+function trashIcon(): SVGSVGElement {
+	return svgIcon('navi-icon', '0 0 16 16', [
+		['path', { d: 'M3.5 4.5h9M6.5 4.5V3h3v1.5M5 4.5l.5 8h5l.5-8', ...STROKE }]
+	]);
+}
+
+// Renders status text, turning `backticked` spans into inline code without using innerHTML.
+export function setStatusText(el: HTMLElement, text: string): void {
+	el.dataset.text = text;
+	el.replaceChildren();
+	text.split(/(`[^`]+`)/).forEach((part) => {
+		if (!part) {
+			return;
+		}
+		if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
+			const code = document.createElement('code');
+			code.textContent = part.slice(1, -1);
+			el.appendChild(code);
+			return;
+		}
+		el.appendChild(document.createTextNode(part));
+	});
+}
+
+export function formatRelativeTime(timestamp: number, now = Date.now()): string {
+	if (!Number.isFinite(timestamp) || timestamp <= 0) {
+		return '';
+	}
+	const minutes = Math.floor(Math.max(0, now - timestamp) / 60000);
+	if (minutes < 1) {
+		return 'now';
+	}
+	if (minutes < 60) {
+		return `${minutes}m`;
+	}
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) {
+		return `${hours}h`;
+	}
+	const days = Math.floor(hours / 24);
+	if (days < 7) {
+		return `${days}d`;
+	}
+	return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export function appendWelcomeMessage(): void {
-	const el = appendMessage('assistant', DEFAULT_WELCOME_MESSAGE);
+	const el = document.createElement('div');
+	el.className = 'message assistant welcome';
 	el.dataset.welcomeMessage = 'true';
+	el.appendChild(svgIcon('welcome-mark', '0 0 24 24', [
+		['circle', { cx: '12', cy: '12', r: '9', stroke: 'currentColor', 'stroke-width': '1.2' }],
+		['path', { d: 'M12 5.5 13.4 10.6 18.5 12 13.4 13.4 12 18.5 10.6 13.4 5.5 12 10.6 10.6Z', fill: 'currentColor' }]
+	]));
+	const title = document.createElement('p');
+	title.className = 'welcome-title';
+	title.textContent = WELCOME_TITLE;
+	const body = document.createElement('p');
+	body.className = 'welcome-body';
+	body.textContent = WELCOME_BODY;
+	el.append(title, body);
+	chatBody.insertBefore(el, toolCallSlot);
 }
 
 export function removeWelcomeMessage(): void {
@@ -314,7 +402,6 @@ export function setTodoCollapsed(collapsed: boolean): void {
 	const shouldStickToBottom = distanceToBottom <= TODO_BOTTOM_STICKY_THRESHOLD_PX;
 	state.todoCollapsed = !!collapsed;
 	todoPanel.classList.toggle('collapsed', state.todoCollapsed);
-	todoToggleBtn.textContent = state.todoCollapsed ? '▸' : '▾';
 	todoToggleBtn.setAttribute('aria-expanded', String(!state.todoCollapsed));
 	if (!shouldStickToBottom) {
 		return;
@@ -470,7 +557,13 @@ export function getRunDurationLabel(run: ChatRun, now = Date.now()): string {
 }
 
 export function getRunMetaText(run: ChatRun, now = Date.now()): string {
-	return [getRunStatusLabel(run.status), getRunDurationLabel(run, now)].filter(Boolean).join(' · ');
+	const duration = getRunDurationLabel(run, now);
+	if (!duration) {
+		return getRunStatusLabel(run.status);
+	}
+	// "Failed in 3 s" reads oddly; stopped runs say how long they lasted instead.
+	const stopped = run.status === 'error' || run.status === 'cancelled';
+	return `${getRunStatusLabel(run.status)} ${stopped ? duration.replace(/^in /, 'after ') : duration}`;
 }
 
 export function refreshRunningRunPanelMeta(): void {
@@ -559,7 +652,8 @@ export function setRunPanelCollapsed(panel: HTMLDivElement, collapsed: boolean):
 	const currentCollapsed = body.classList.contains('collapsed');
 	panel.classList.toggle('collapsed', nextCollapsed);
 	toggle.setAttribute('aria-expanded', String(!nextCollapsed));
-	toggle.textContent = nextCollapsed ? T.expand : T.collapse;
+	toggle.setAttribute('aria-label', nextCollapsed ? T.expand : T.collapse);
+	toggle.title = nextCollapsed ? T.expand : T.collapse;
 	const hasSummaryText = !!summary.textContent?.trim();
 	if (currentCollapsed === nextCollapsed) {
 		if (nextCollapsed) {
@@ -652,6 +746,10 @@ export function createRunPanel(run: ChatRun): HTMLDivElement {
 
 	const header = document.createElement('div');
 	header.className = 'run-panel-header';
+	const statusDot = document.createElement('span');
+	statusDot.className = 'run-panel-status';
+	statusDot.setAttribute('aria-hidden', 'true');
+	header.appendChild(statusDot);
 
 	const titleWrap = document.createElement('div');
 	titleWrap.className = 'run-panel-title-wrap';
@@ -664,8 +762,9 @@ export function createRunPanel(run: ChatRun): HTMLDivElement {
 
 	const toggle = document.createElement('button');
 	toggle.type = 'button';
-	toggle.className = 'run-panel-toggle';
-	toggle.textContent = T.collapse;
+	toggle.className = 'run-panel-toggle navi-icon-btn';
+	toggle.setAttribute('aria-label', T.collapse);
+	toggle.appendChild(chevronIcon('run-panel-chevron'));
 	toggle.addEventListener('click', (event) => {
 		event.stopPropagation();
 		const nextCollapsed = !panel.classList.contains('collapsed');
@@ -772,6 +871,7 @@ export function clearRunPanelTransientToolStatus(runId: string, immediate = fals
 		toolSlot.classList.add('empty');
 		toolSlot.classList.remove('tool-status-fade-out');
 		toolSlot.textContent = '';
+		delete toolSlot.dataset.text;
 	};
 	if (immediate || !toolSlot.textContent?.trim()) {
 		finalize();
@@ -803,7 +903,7 @@ export function setRunPanelTransientToolStatus(runId: string, text: string): voi
 		runPanelToolStatusHideTimeouts.delete(runId);
 	}
 	runPanelToolStatusClearModes.delete(runId);
-	if (toolSlot.textContent === text && !toolSlot.classList.contains('hidden')) {
+	if (toolSlot.dataset.text === text && !toolSlot.classList.contains('hidden')) {
 		keepRunPanelTransientToolStatusAtBottom(runId);
 		toolSlot.classList.remove('tool-status-fade-out');
 		toolSlot.classList.remove('empty');
@@ -814,7 +914,7 @@ export function setRunPanelTransientToolStatus(runId: string, text: string): voi
 	toolSlot.classList.remove('empty');
 	toolSlot.classList.remove('tool-status-fade-out');
 	toolSlot.classList.remove('tool-status-switch');
-	toolSlot.textContent = text;
+	setStatusText(toolSlot, text);
 	void toolSlot.offsetWidth;
 	toolSlot.classList.add('tool-status-switch');
 }
@@ -844,7 +944,8 @@ export function renderRunPanel(run: ChatRun): void {
 
 	title.textContent = run.title || 'Sub Agent';
 	meta.textContent = getRunMetaText(run);
-	toggle.textContent = run.collapsed ? T.expand : T.collapse;
+	panel.dataset.status = run.status;
+	panel.dataset.kind = run.kind;
 	summary.textContent = '';
 	summary.classList.remove('show');
 
@@ -870,7 +971,7 @@ export function renderRunPanel(run: ChatRun): void {
 			...progressEvents.map((event) => {
 				const el = document.createElement('div');
 				el.className = 'tool-status progress-entry';
-				el.textContent = event.text || '';
+				setStatusText(el, event.text || '');
 				if (!progressCollapsed && !previousProgressIds.has(event.id)) {
 					el.classList.add('progress-entry-appear');
 				}
@@ -1012,17 +1113,19 @@ export function renderTodos(todos: ChatTodo[]): void {
 	}
 
 	const doneCount = state.todosState.filter((todo) => !!todo.completed).length;
-	todoSummary.textContent = `${doneCount}/${state.todosState.length} completed`;
+	todoSummary.textContent = `${doneCount} of ${state.todosState.length} done`;
 	todoPanel.classList.add('show');
 	composerShell.classList.add('has-todos');
 	setTodoCollapsed(state.todoCollapsed);
 
+	const nextIndex = state.todosState.findIndex((todo) => !todo.completed);
 	state.todosState.forEach((todo, index) => {
 		const row = document.createElement('div');
-		row.className = `todo-item${todo.completed ? ' done' : ''}`;
+		row.className = `todo-item${todo.completed ? ' done' : ''}${index === nextIndex ? ' next' : ''}`;
 		const marker = document.createElement('span');
 		marker.className = 'todo-marker';
-		marker.textContent = todo.completed ? '✓' : '○';
+		marker.setAttribute('role', 'img');
+		marker.setAttribute('aria-label', todo.completed ? 'Done' : index === nextIndex ? 'Next' : 'To do');
 		const text = document.createElement('span');
 		text.className = 'todo-text';
 		text.textContent = todo.text || '';
@@ -1099,10 +1202,14 @@ export function toggleSessionDrawer(): void {
 
 export function filterSessions(query: string): void {
 	const q = query.trim().toLowerCase();
+	let visible = 0;
 	sessionList.querySelectorAll<HTMLDivElement>('.session-card').forEach((card) => {
 		const title = (card.dataset.title || '').toLowerCase();
-		card.style.display = !q || title.includes(q) ? '' : 'none';
+		const match = !q || title.includes(q);
+		card.style.display = match ? '' : 'none';
+		visible += match ? 1 : 0;
 	});
+	sessionEmpty?.classList.toggle('show', visible === 0);
 }
 
 export function renderSessions(sessions: ChatSession[], activeSessionId: string): void {
@@ -1171,10 +1278,20 @@ export function renderSessions(sessions: ChatSession[], activeSessionId: string)
 			return;
 		}
 
+		const sessionTitle = session.title || 'New Chat';
 		const item = document.createElement('button');
 		item.type = 'button';
 		item.className = 'session-card-main';
-		item.textContent = session.title || 'New Chat';
+		const itemTitle = document.createElement('span');
+		itemTitle.className = 'session-card-title';
+		itemTitle.textContent = sessionTitle;
+		const itemTime = document.createElement('span');
+		itemTime.className = 'session-card-time';
+		itemTime.textContent = formatRelativeTime(session.createdAt);
+		item.append(itemTitle, itemTime);
+		if (session.id === state.currentSessionId) {
+			item.setAttribute('aria-current', 'true');
+		}
 		item.addEventListener('click', () => {
 			if (state.isBusy || !session.id || session.id === state.currentSessionId) {
 				return;
@@ -1188,8 +1305,10 @@ export function renderSessions(sessions: ChatSession[], activeSessionId: string)
 
 		const renameBtn = document.createElement('button');
 		renameBtn.type = 'button';
-		renameBtn.className = 'session-tool';
-		renameBtn.textContent = 'Rename';
+		renameBtn.className = 'session-tool navi-icon-btn';
+		renameBtn.setAttribute('aria-label', T.renameSession(sessionTitle));
+		renameBtn.title = 'Rename';
+		renameBtn.appendChild(pencilIcon());
 		renameBtn.addEventListener('click', () => {
 			if (state.isBusy || !session.id) {
 				return;
@@ -1200,8 +1319,10 @@ export function renderSessions(sessions: ChatSession[], activeSessionId: string)
 
 		const deleteBtn = document.createElement('button');
 		deleteBtn.type = 'button';
-		deleteBtn.className = 'session-tool';
-		deleteBtn.textContent = 'Delete';
+		deleteBtn.className = 'session-tool session-tool-danger navi-icon-btn';
+		deleteBtn.setAttribute('aria-label', T.deleteSession(sessionTitle));
+		deleteBtn.title = 'Delete';
+		deleteBtn.appendChild(trashIcon());
 		deleteBtn.addEventListener('click', () => {
 			if (state.isBusy || !session.id) {
 				return;
@@ -1276,7 +1397,7 @@ export function appendTransientToolStatus(text: string): void {
 	toolCallSlot.classList.remove('empty');
 	toolCallSlot.classList.remove('tool-status-fade-out');
 	toolCallSlot.classList.remove('tool-status-switch');
-	toolCallSlot.textContent = text;
+	setStatusText(toolCallSlot, text);
 	void toolCallSlot.offsetWidth;
 	toolCallSlot.classList.add('tool-status-switch');
 	state.activeAssistantMessage = null;
@@ -1297,7 +1418,7 @@ export function appendToolStatus(text: string, transient: boolean): void {
 	}
 	const el = document.createElement('div');
 	el.className = 'tool-status progress-entry';
-	el.textContent = text;
+	setStatusText(el, text);
 	el.classList.add('progress-entry-appear');
 	el.dataset.progressRunId = String(state.activeProgressRunId);
 	const runNodes = progressRunNodes.get(state.activeProgressRunId) || [];
@@ -1334,7 +1455,7 @@ export function appendHistoricalStatus(text: string, kind: ChatStatusEntry['kind
 	state.nextProgressRunId = Math.max(state.nextProgressRunId, normalizedRunId + 1);
 	const el = document.createElement('div');
 	el.className = 'tool-status progress-entry';
-	el.textContent = text;
+	setStatusText(el, text);
 	el.dataset.progressRunId = String(normalizedRunId);
 	const runNodes = progressRunNodes.get(normalizedRunId) || [];
 	runNodes.push(el);
