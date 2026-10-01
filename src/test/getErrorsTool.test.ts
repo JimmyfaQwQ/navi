@@ -1,12 +1,17 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { createGetErrorsTool } from '../agent/tools/getErrorsTool.js';
+
+// Build paths with the host's separator so the tests pass on Windows and POSIX runners.
+const workspaceRoot = path.resolve('/workspace/navi');
+const uriAt = (...segments: string[]) => ({ fsPath: path.join(...segments) }) as vscode.Uri;
 
 suite('createGetErrorsTool', () => {
 	test('lists workspace diagnostics and returns severity summary', async () => {
 		const diagnostics = [
 			[
-				{ fsPath: 'E:\\navi\\src\\a.ts' } as vscode.Uri,
+				uriAt(workspaceRoot, 'src', 'a.ts'),
 				[
 					{
 						range: new vscode.Range(0, 0, 0, 4),
@@ -23,7 +28,7 @@ suite('createGetErrorsTool', () => {
 				] as readonly vscode.Diagnostic[]
 			],
 			[
-				{ fsPath: 'E:\\other\\b.ts' } as vscode.Uri,
+				uriAt(path.resolve('/workspace/other'), 'b.ts'),
 				[
 					{
 						range: new vscode.Range(1, 0, 1, 3),
@@ -36,7 +41,7 @@ suite('createGetErrorsTool', () => {
 		] as ReadonlyArray<[vscode.Uri, readonly vscode.Diagnostic[]]>;
 
 		const tool = createGetErrorsTool({
-			resolveWorkspaceRoot: () => 'E:\\navi',
+			resolveWorkspaceRoot: () => workspaceRoot,
 			getAllDiagnostics: () => diagnostics
 		});
 
@@ -63,7 +68,7 @@ suite('createGetErrorsTool', () => {
 	test('supports filtering diagnostics by filePaths input', async () => {
 		const diagnostics = [
 			[
-				{ fsPath: 'E:\\navi\\src\\a.ts' } as vscode.Uri,
+				uriAt(workspaceRoot, 'src', 'a.ts'),
 				[
 					{
 						range: new vscode.Range(0, 0, 0, 2),
@@ -73,7 +78,7 @@ suite('createGetErrorsTool', () => {
 				] as readonly vscode.Diagnostic[]
 			],
 			[
-				{ fsPath: 'E:\\navi\\src\\b.ts' } as vscode.Uri,
+				uriAt(workspaceRoot, 'src', 'b.ts'),
 				[
 					{
 						range: new vscode.Range(1, 0, 1, 2),
@@ -85,7 +90,7 @@ suite('createGetErrorsTool', () => {
 		] as ReadonlyArray<[vscode.Uri, readonly vscode.Diagnostic[]]>;
 
 		const tool = createGetErrorsTool({
-			resolveWorkspaceRoot: () => 'E:\\navi',
+			resolveWorkspaceRoot: () => workspaceRoot,
 			getAllDiagnostics: () => diagnostics
 		});
 
