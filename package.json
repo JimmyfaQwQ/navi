@@ -3,6 +3,13 @@
   "displayName": "Navi",
   "description": "Ai empowered coding navigator.",
   "version": "0.0.1",
+  "publisher": "jimmyfaqwq",
+  "license": "MIT",
+  "icon": "media/navi.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JimmyfaQwQ/navi.git"
+  },
   "engines": {
     "vscode": "^1.110.0"
   },
@@ -159,6 +166,7 @@
     "@types/vscode": "^1.110.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
     "eslint": "^9.39.3",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
