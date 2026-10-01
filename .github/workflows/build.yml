@@ -4,7 +4,8 @@ name: Build
 # platform-specific npm package (@github/copilot-sdk-<platform>), so each target
 # installs its own runtime with npm's --os / --cpu / --libc overrides and is
 # packaged with `vsce package --target`. Pushing a v* tag also publishes the
-# packages to a GitHub release.
+# packages to a GitHub release and, when the VSCE_PAT secret is set, to the
+# VS Code Marketplace.
 
 on:
   push:
@@ -91,6 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Azure DevOps PAT with Marketplace (Manage) scope. Global PATs are retired
+      # on 2026-12-01; publishing is skipped when the secret is not set.
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -112,3 +117,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" vsix/*.vsix --title "Navi $GITHUB_REF_NAME" --generate-notes
+
+      - name: Publish to the VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx --yes @vscode/vsce@4 publish --packagePath vsix/*.vsix
