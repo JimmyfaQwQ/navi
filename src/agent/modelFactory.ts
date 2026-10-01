@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { CopilotClient } from '@github/copilot-sdk';
+import { CopilotClient, RuntimeConnection } from '@github/copilot-sdk';
 import type { CopilotClientOptions, SessionConfig } from '@github/copilot-sdk';
 import {
 	resolveApiKey,
@@ -18,7 +16,10 @@ let hasShownCliPathWarning = false;
 /**
  * Create a {@link CopilotClient}.
  *
- * - **copilot** mode: `useLoggedInUser: true` + optional `githubToken`
+ * The SDK launches its bundled runtime (`@github/copilot-sdk-<platform>`) by
+ * default. `navi.copilotCliPath` overrides it with an explicit executable.
+ *
+ * - **copilot** mode: `useLoggedInUser` + optional `gitHubToken`
  *   obtained from `vscode.authentication`.
  * - **byok** mode: `useLoggedInUser: false`; BYOK credentials are
  *   passed at session-creation time via {@link resolveProvider}.
@@ -28,46 +29,50 @@ export async function createCopilotClient(
 ): Promise<CopilotClient> {
 	const authMode = resolveAuthMode(config);
 	const debugCliArgs = resolveDebugCopilotCliArgs(config);
-	const workspaceCwd = getActiveWorkspaceRoot();
-	const configuredCliPathRaw = resolveCopilotCliPath(config);
-	const configuredCliPath = configuredCliPathRaw && existsSync(configuredCliPathRaw) ? configuredCliPathRaw : undefined;
-	const resolvedCli = resolveNativeCopilotCliPathInVsCodeHost(debugCliArgs);
-	const cliPath = configuredCliPath ?? resolvedCli.path;
-	if (debugCliArgs && configuredCliPathRaw && !configuredCliPath) {
-		cliDebugOutput.appendLine(`[resolve-cli] Ignoring invalid navi.copilotCliPath: ${configuredCliPathRaw}`);
-	}
-	if (!configuredCliPath && !cliPath) {
-		maybeWarnCliPathNotResolved(resolvedCli.tried);
-	}
+	const cliPath = resolveConfiguredCliPath(config);
 
-	if (authMode === 'copilot') {
-		const githubToken = await acquireGitHubToken();
-		const options: CopilotClientOptions = {
-			cliPath,
-			cwd: workspaceCwd,
-			useLoggedInUser: !githubToken,
-			githubToken,
-			logLevel: 'error'
-		};
-		const client = new CopilotClient(options);
-		if (debugCliArgs) {
-			logCopilotCliLaunch(client, options);
-		}
-		return client;
-	}
-
-	// BYOK – no GitHub auth required
 	const options: CopilotClientOptions = {
-		cliPath,
-		cwd: workspaceCwd,
-		useLoggedInUser: false,
+		connection: cliPath ? RuntimeConnection.forStdio({ path: cliPath }) : undefined,
+		workingDirectory: getActiveWorkspaceRoot(),
 		logLevel: 'error'
 	};
+
+	if (authMode === 'copilot') {
+		const gitHubToken = await acquireGitHubToken();
+		options.gitHubToken = gitHubToken;
+		options.useLoggedInUser = !gitHubToken;
+	} else {
+		// BYOK – no GitHub auth required
+		options.useLoggedInUser = false;
+	}
+
 	const client = new CopilotClient(options);
 	if (debugCliArgs) {
-		logCopilotCliLaunch(client, options);
+		logCopilotCliLaunch(options, cliPath);
 	}
 	return client;
+}
+
+/**
+ * Returns the user-configured runtime path, or `undefined` to use the SDK's
+ * bundled runtime. An invalid path is reported once and then ignored.
+ */
+function resolveConfiguredCliPath(config: vscode.WorkspaceConfiguration): string | undefined {
+	const configured = resolveCopilotCliPath(config);
+	if (!configured) {
+		return undefined;
+	}
+	if (existsSync(configured)) {
+		return configured;
+	}
+	cliDebugOutput.appendLine(`[resolve-cli] navi.copilotCliPath does not exist, using the bundled runtime instead: ${configured}`);
+	if (!hasShownCliPathWarning) {
+		hasShownCliPathWarning = true;
+		void vscode.window.showWarningMessage(
+			`Navi couldn't find the Copilot CLI at "${configured}", so it's using the bundled runtime. Clear navi.copilotCliPath or point it at an existing executable.`
+		);
+	}
+	return undefined;
 }
 
 /**
@@ -115,67 +120,14 @@ async function acquireGitHubToken(): Promise<string | undefined> {
 	return (process.env.GITHUB_TOKEN ?? '').trim() || undefined;
 }
 
-type RuntimeClientOptions = {
-	cliPath?: string;
-	cliArgs?: string[];
-	cwd?: string;
-	useStdio?: boolean;
-	port?: number;
-	logLevel?: string;
-	githubToken?: string;
-	useLoggedInUser?: boolean;
-};
-
-function logCopilotCliLaunch(client: CopilotClient, requestedOptions: CopilotClientOptions): void {
-	const runtimeOptions = ((client as unknown as { options?: RuntimeClientOptions }).options ?? {}) as RuntimeClientOptions;
-	const cliPath = runtimeOptions.cliPath ?? requestedOptions.cliPath ?? '<unknown-cli-path>';
-	const cliArgs = Array.isArray(runtimeOptions.cliArgs) ? runtimeOptions.cliArgs : (requestedOptions.cliArgs ?? []);
-	const cwd = runtimeOptions.cwd ?? requestedOptions.cwd ?? process.cwd();
-	const logLevel = runtimeOptions.logLevel ?? requestedOptions.logLevel ?? 'debug';
-	const useStdio = runtimeOptions.useStdio ?? (requestedOptions.useStdio ?? true);
-	const port = runtimeOptions.port ?? requestedOptions.port ?? 0;
-	const hasGitHubToken = Boolean(runtimeOptions.githubToken ?? requestedOptions.githubToken);
-	const useLoggedInUser = runtimeOptions.useLoggedInUser ?? requestedOptions.useLoggedInUser ?? true;
-
-	const sdkManagedArgs: string[] = [
-		'--headless',
-		'--no-auto-update',
-		'--log-level',
-		logLevel
-	];
-
-	if (useStdio) {
-		sdkManagedArgs.push('--stdio');
-	} else if (port > 0) {
-		sdkManagedArgs.push('--port', String(port));
-	}
-	if (hasGitHubToken) {
-		sdkManagedArgs.push('--auth-token-env', 'COPILOT_SDK_AUTH_TOKEN');
-	}
-	if (!useLoggedInUser) {
-		sdkManagedArgs.push('--no-auto-login');
-	}
-
-	const argv = [...cliArgs, ...sdkManagedArgs];
-	const commandParts = cliPath.endsWith('.js')
-		? [process.execPath, cliPath, ...argv]
-		: [cliPath, ...argv];
-
-	const formatArg = (value: string): string => {
-		if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
-			return value;
-		}
-		return JSON.stringify(value);
-	};
-
-	cliDebugOutput.appendLine(`[${new Date().toISOString()}] Copilot CLI launch preview`);
-	cliDebugOutput.appendLine(`cliPath: ${cliPath}`);
-	cliDebugOutput.appendLine(`cwd: ${cwd}`);
-	cliDebugOutput.appendLine(`process.execPath: ${process.execPath}`);
-	cliDebugOutput.appendLine(`argv(json): ${JSON.stringify(argv)}`);
-	cliDebugOutput.appendLine(`command(pretty): ${commandParts.map(formatArg).join(' ')}`);
+function logCopilotCliLaunch(options: CopilotClientOptions, cliPath: string | undefined): void {
+	cliDebugOutput.appendLine(`[${new Date().toISOString()}] Copilot runtime launch`);
+	cliDebugOutput.appendLine(`runtime: ${cliPath ?? `bundled (@github/copilot-sdk-${process.platform}-${process.arch})`}`);
+	cliDebugOutput.appendLine(`COPILOT_CLI_PATH: ${process.env.COPILOT_CLI_PATH ?? '<unset>'}`);
+	cliDebugOutput.appendLine(`workingDirectory: ${options.workingDirectory ?? process.cwd()}`);
+	cliDebugOutput.appendLine(`logLevel: ${options.logLevel ?? '<runtime default>'}`);
 	cliDebugOutput.appendLine(
-		`auth: hasGithubToken=${hasGitHubToken}, useLoggedInUser=${useLoggedInUser}`
+		`auth: hasGitHubToken=${Boolean(options.gitHubToken)}, useLoggedInUser=${options.useLoggedInUser ?? true}`
 	);
 	cliDebugOutput.appendLine('---');
 	cliDebugOutput.show(true);
@@ -183,112 +135,4 @@ function logCopilotCliLaunch(client: CopilotClient, requestedOptions: CopilotCli
 
 function getActiveWorkspaceRoot(): string | undefined {
 	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-}
-
-function resolveNativeCopilotCliPathInVsCodeHost(debug: boolean): { path?: string; tried: string[] } {
-	// In VS Code extension hosts, process.execPath is often Code.exe, which cannot run JS entry files as Node.
-	const isVsCodeHost = /code( - insiders)?\.exe$/i.test(process.execPath);
-	const tried: string[] = [];
-	if (!isVsCodeHost) {
-		if (debug) {
-			cliDebugOutput.appendLine('[resolve-cli] Skip native CLI probe: not in VS Code host process');
-		}
-		return { path: undefined, tried };
-	}
-
-	const packageByPlatform: Record<string, string> = {
-		'win32:x64': '@github/copilot-win32-x64',
-		'win32:arm64': '@github/copilot-win32-arm64',
-		'darwin:x64': '@github/copilot-darwin-x64',
-		'darwin:arm64': '@github/copilot-darwin-arm64',
-		'linux:x64': '@github/copilot-linux-x64',
-		'linux:arm64': '@github/copilot-linux-arm64'
-	};
-
-	const key = `${process.platform}:${process.arch}`;
-	const packageName = packageByPlatform[key];
-	if (!packageName) {
-		if (debug) {
-			cliDebugOutput.appendLine(`[resolve-cli] Unsupported platform/arch: ${key}`);
-		}
-		return { path: undefined, tried };
-	}
-
-	const binName = process.platform === 'win32' ? 'copilot.exe' : 'copilot';
-
-	// 1) Prefer Navi extension's own node_modules by walking up from current module location.
-	let dir = __dirname;
-	for (let i = 0; i < 8; i += 1) {
-		const candidate = join(dir, 'node_modules', ...packageName.split('/'), binName);
-		tried.push(candidate);
-		if (existsSync(candidate)) {
-			if (debug) {
-				cliDebugOutput.appendLine(`[resolve-cli] Resolved from extension-local node_modules: ${candidate}`);
-			}
-			return { path: candidate, tried };
-		}
-		const parent = dirname(dir);
-		if (parent === dir) {
-			break;
-		}
-		dir = parent;
-	}
-
-	// 2) Resolve relative to @github/copilot-sdk package location (same scope folder sibling).
-	try {
-		const requireFn = createRequire(__filename);
-		const copilotSdkEntry = requireFn.resolve('@github/copilot-sdk');
-		const copilotSdkPackageDir = findPackageDir(copilotSdkEntry);
-		const scopeDir = dirname(copilotSdkPackageDir);
-		const sibling = join(scopeDir, packageName.split('/')[1], binName);
-		tried.push(sibling);
-		if (existsSync(sibling)) {
-			if (debug) {
-				cliDebugOutput.appendLine(`[resolve-cli] Resolved via @github/copilot-sdk sibling package: ${sibling}`);
-			}
-			return { path: sibling, tried };
-		}
-	} catch {
-		// continue probing
-	}
-
-	if (debug) {
-		cliDebugOutput.appendLine(`[resolve-cli] Failed to resolve native CLI (${packageName}/${binName}).`);
-		cliDebugOutput.appendLine('[resolve-cli] Auto probe failed; user can set navi.copilotCliPath.');
-		for (const candidate of tried) {
-			cliDebugOutput.appendLine(`[resolve-cli] tried: ${candidate}`);
-		}
-	}
-
-	return { path: undefined, tried };
-}
-
-function findPackageDir(resolvedEntryPath: string): string {
-	let dir = dirname(resolvedEntryPath);
-	for (let i = 0; i < 8; i += 1) {
-		if (existsSync(join(dir, 'package.json'))) {
-			return dir;
-		}
-		const parent = dirname(dir);
-		if (parent === dir) {
-			break;
-		}
-		dir = parent;
-	}
-	throw new Error(`Unable to locate package.json for resolved entry: ${resolvedEntryPath}`);
-}
-
-function maybeWarnCliPathNotResolved(tried: string[]): void {
-	if (hasShownCliPathWarning) {
-		return;
-	}
-	hasShownCliPathWarning = true;
-
-	void vscode.window.showWarningMessage(
-		'Could not automatically locate the Copilot CLI executable. Please configure navi.copilotCliPath in the settings (for example, node_modules/@github/copilot-win32-x64/copilot.exe).'
-	);
-	cliDebugOutput.appendLine('[resolve-cli] WARNING: auto resolution failed. Please set navi.copilotCliPath.');
-	for (const candidate of tried) {
-		cliDebugOutput.appendLine(`[resolve-cli] tried: ${candidate}`);
-	}
 }

@@ -335,7 +335,7 @@ function renderMcpCard(name: string, servers: McpDraft): HTMLElement {
 	if ((entry.type || 'stdio') === 'stdio') {
 		body.appendChild(field('Command', mcpText(entry, 'command', servers, 'npx')));
 		body.appendChild(field('Arguments', mcpArgs(entry, servers), 'JSON array'));
-		body.appendChild(field('Working directory', mcpText(entry, 'cwd', servers, 'Workspace root')));
+		body.appendChild(field('Working directory', mcpWorkingDirectory(entry, servers)));
 	} else {
 		body.appendChild(field('URL', mcpText(entry, 'url', servers, 'https://')));
 	}
@@ -359,6 +359,20 @@ function mcpText(entry: any, key: string, servers: McpDraft, placeholder?: strin
 	i.spellcheck = false;
 	if (placeholder) { i.placeholder = placeholder; }
 	i.addEventListener('change', () => { entry[key] = i.value; commitMcp(servers); });
+	return i;
+}
+// Writes `workingDirectory` (SDK 1.x name) and drops the legacy `cwd` it replaces.
+function mcpWorkingDirectory(entry: any, servers: McpDraft): HTMLInputElement {
+	const i = el('input', 'settings-input') as HTMLInputElement;
+	const current = entry.workingDirectory ?? entry.cwd;
+	i.value = typeof current === 'string' ? current : '';
+	i.spellcheck = false;
+	i.placeholder = 'Workspace root';
+	i.addEventListener('change', () => {
+		delete entry.cwd;
+		if (i.value.trim()) { entry.workingDirectory = i.value.trim(); } else { delete entry.workingDirectory; }
+		commitMcp(servers);
+	});
 	return i;
 }
 function mcpArgs(entry: any, servers: McpDraft): HTMLInputElement {

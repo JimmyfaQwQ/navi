@@ -20,6 +20,18 @@ export type AgentEvent =
 	| { type: 'session.idle' }
 	| { type: 'session.error'; message: string };
 
+// SDK 1.x tags sub-agent events with an event-level `agentId` and deprecates
+// `data.parentToolCallId`. Navi keys sub-agent runs by the spawning tool call,
+// so remember which tool call each agent instance belongs to as a fallback.
+const toolCallIdByAgentId = new Map<string, string>();
+
+function resolveParentToolCallId(event: { agentId?: string }, legacyParentToolCallId: string | undefined): string | undefined {
+	if (legacyParentToolCallId) {
+		return legacyParentToolCallId;
+	}
+	return event.agentId ? toolCallIdByAgentId.get(event.agentId) : undefined;
+}
+
 /** Map a raw SDK session event to a normalized {@link AgentEvent}, or null when not relevant. */
 export function toAgentEvent(event: SessionEvent): AgentEvent | null {
 	switch (event.type) {
@@ -28,21 +40,21 @@ export function toAgentEvent(event: SessionEvent): AgentEvent | null {
 				type: 'assistant.delta',
 				messageId: event.data.messageId,
 				text: event.data.deltaContent ?? '',
-				parentToolCallId: event.data.parentToolCallId
+				parentToolCallId: resolveParentToolCallId(event, event.data.parentToolCallId)
 			};
 		case 'assistant.message':
 			return {
 				type: 'assistant.message',
 				messageId: event.data.messageId,
 				text: extractAssistantMessageText(event.data),
-				parentToolCallId: event.data.parentToolCallId
+				parentToolCallId: resolveParentToolCallId(event, event.data.parentToolCallId)
 			};
 		case 'tool.execution_start':
 			return {
 				type: 'tool.start',
 				toolCallId: event.data.toolCallId,
 				toolName: event.data.toolName ?? 'unknown_tool',
-				parentToolCallId: event.data.parentToolCallId
+				parentToolCallId: resolveParentToolCallId(event, event.data.parentToolCallId)
 			};
 		case 'tool.execution_progress':
 			return {
@@ -58,6 +70,9 @@ export function toAgentEvent(event: SessionEvent): AgentEvent | null {
 				resultContent: extractToolResultContent(event.data)
 			};
 		case 'subagent.started':
+			if (event.agentId) {
+				toolCallIdByAgentId.set(event.agentId, event.data.toolCallId);
+			}
 			return {
 				type: 'subagent.started',
 				toolCallId: event.data.toolCallId,
@@ -65,6 +80,9 @@ export function toAgentEvent(event: SessionEvent): AgentEvent | null {
 				agentDisplayName: event.data.agentDisplayName
 			};
 		case 'subagent.completed':
+			if (event.agentId) {
+				toolCallIdByAgentId.delete(event.agentId);
+			}
 			return {
 				type: 'subagent.completed',
 				toolCallId: event.data.toolCallId,
@@ -73,6 +91,9 @@ export function toAgentEvent(event: SessionEvent): AgentEvent | null {
 				durationMs: event.data.durationMs
 			};
 		case 'subagent.failed':
+			if (event.agentId) {
+				toolCallIdByAgentId.delete(event.agentId);
+			}
 			return {
 				type: 'subagent.failed',
 				toolCallId: event.data.toolCallId,
@@ -133,8 +154,7 @@ export function logSessionEvent(event: SessionEvent): void {
 		case 'session.idle':
 			logAgentFlow('main.gateway.event', 'session.idle', {
 				aborted: !!event.data.aborted,
-				backgroundAgents: event.data.backgroundTasks?.agents?.length ?? 0,
-				backgroundShells: event.data.backgroundTasks?.shells?.length ?? 0
+				mode: event.data.mode ?? 'unknown'
 			});
 			break;
 		default:

@@ -56,6 +56,13 @@ export function toEnabledMcpConnections(servers: McpServerSettings): Record<stri
 		if (Object.keys(connection).length === 0) {
 			throw new Error(`The configuration for MCP server "${serverName}" must include a connection (e.g. command or url).`);
 		}
+		// Copilot SDK 1.x renamed the stdio `cwd` field to `workingDirectory`; keep older configs working.
+		if (typeof connection.cwd === 'string') {
+			if (connection.workingDirectory === undefined) {
+				connection.workingDirectory = connection.cwd;
+			}
+			delete connection.cwd;
+		}
 		result[serverName] = connection as unknown as MCPServerConfig;
 	}
 

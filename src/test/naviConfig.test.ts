@@ -23,7 +23,7 @@ suite('naviConfig', () => {
 	test('resolves documented defaults when nothing is overridden', () => {
 		assert.strictEqual(resolveAuthMode(), 'copilot');
 		assert.strictEqual(resolveModel(), DEFAULT_MODEL);
-		assert.strictEqual(resolveModel(), 'gpt-5-mini');
+		assert.strictEqual(resolveModel(), 'gpt-6-luna');
 		assert.strictEqual(resolveBaseUrl(), DEFAULT_API_BASE_URL);
 		assert.strictEqual(resolveStreaming(), true);
 	});
