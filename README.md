@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="./media/navi.svg" alt="Navi" width="96" />
+  <img src="./media/navi.png" alt="Navi" width="96" />
 </p>
 
 <h1 align="center">Navi</h1>
 
 <p align="center">
-  VS Code 里的编程导师：告诉你改哪里、为什么改、怎么算改完，代码由你自己写。
+  AI 编程导师 - Tutor, Not an Agent.
 </p>
 
 <p align="center">
@@ -14,50 +14,28 @@
   </a>
 </p>
 
-大多数 AI 编程工具会直接替你把代码写完。Navi 反过来：它读懂你的项目，把一个改动拆成几个小步骤，在编辑器里标出每一步要改的那几行，你写完之后再帮你检查。
+Navi 是一个基于 [GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk) 的 VS Code 扩展，支持 GitHub Copilot 订阅和任意 OpenAI 兼容 API。
 
-Navi 基于 [GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk) 构建，可以用 GitHub Copilot 订阅，也可以接任意 OpenAI 兼容的 API。
+## 功能
 
-## 工作方式
-
-你在聊天里描述想做的改动，Navi 会：
-
-1. **读代码。** 自己搜索、阅读相关文件，必要时看诊断信息和 `git diff`。
-2. **拆任务。** 把改动拆成几个 5–10 分钟能完成的小任务，显示在输入框上方的任务列表里。
-3. **标位置。** 每次只推进一个任务：在编辑器里高亮你要改的那几行，并在聊天里说明这一步的目标、每处要怎么改、哪里容易出错、怎么算完成。
-4. **查结果。** 你改完后说一声，或在 Focus 面板里选中区域点 **Review**，Navi 会看你实际写了什么，对照要求逐条检查。通过就勾掉任务、进入下一步，不通过就指出具体缺什么。
-
-问概念或者问"这段代码怎么工作的"时，它会直接回答，不走上面这套流程。
-
-Navi 的主 Agent 没有写文件的权限，这一点在会话配置里强制限制，不只是靠 prompt。它可以运行只读的 shell 命令，比如 `git diff` 或跑测试。
+- **任务拆解**：把一个改动拆成几个小任务，显示在聊天输入框上方。
+- **Focus 区域**：在编辑器里高亮每一步要改的代码行，可以逐个跳转。
+- **讲解与检查**：选中区域后点 **Help** 获取讲解，点 **Review** 检查改动，通过后自动勾掉对应任务。
+- **多会话、MCP 工具扩展、图形化设置页**。
 
 ## 界面
 
-Navi 在右侧的辅助侧边栏里，有两个视图：
+Navi 位于右侧的辅助侧边栏：
 
-- **Navi**：聊天。包括会话列表、Agent 的执行步骤、子 Agent 的运行记录、任务列表和输入框。
-- **Focus**：当前所有高亮区域。可以按顺序逐个跳转，也可以勾选几个区域，让 Navi 讲解（**Help**）或检查（**Review**）。
-
-聊天输入框左下角的按钮可以打开设置页，用来配置认证方式、模型和 MCP 服务器。也可以从命令面板打开。
-
-命令：
+- **Navi**：聊天、任务列表、子 Agent 运行记录
+- **Focus**：高亮区域列表，支持跳转、勾选、Help / Review
 
 | 命令 | 作用 |
 | --- | --- |
 | `Navi: New Chat` | 新建会话 |
 | `Navi: Open Settings` | 打开设置页 |
-| `Navi: Switch Focus Region` | 从列表中选择要跳转的区域 |
+| `Navi: Switch Focus Region` | 选择要跳转的区域 |
 | `Navi: Focus Previous Region` / `Navi: Focus Next Region` | 跳到上一个 / 下一个区域 |
-
-## 子 Agent
-
-探索代码、拆任务、检查改动默认都由主 Agent 自己完成，因为它有完整的对话上下文。只有三种情况会交给 Copilot CLI 内置的子 Agent：
-
-- `explore`：问题能拆成几条互不相关的线索时，并行调查。
-- `code-review`：改动较大或风险较高，或你要求独立审查时，用全新的上下文看一遍 diff。
-- `security-review`：仅在你要求安全审查时使用。
-
-其余内置 Agent（比如能改文件的 `task` 和 `general-purpose`）在会话里是禁用的。子 Agent 的运行会作为独立的卡片显示在聊天里。
 
 ## 安装与运行
 
@@ -159,4 +137,4 @@ media/                webview 样式和图标
 
 ## 许可证
 
-本仓库目前没有许可证文件。对外发布前请先补充。
+[MIT](./LICENSE)
