@@ -1,8 +1,8 @@
 {
-  "name": "navi",
-  "displayName": "Navi",
+  "name": "navi-mentor",
+  "displayName": "Navi Mentor",
   "description": "Ai empowered coding navigator.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "Jimmyfa",
   "license": "MIT",
   "icon": "media/navi.png",

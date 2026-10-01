@@ -1,8 +1,12 @@
 # 更新日志
 
+## [0.1.2] - 2026-10-02
+
+- 上架 VS Code 插件市场，名称为 Navi Mentor，扩展 ID 为 `Jimmyfa.navi-mentor`。
+
 ## [0.1.1] - 2026-10-02
 
-- 发布到 VS Code 插件市场，扩展 ID 改为 `Jimmyfa.navi`。
+- publisher 改为 `Jimmyfa`。这个版本没有上架插件市场。
 
 ## [0.1.0] - 2026-10-01
 
